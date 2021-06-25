@@ -1,0 +1,198 @@
+component TLPM
+    % TLPM : 3
+    % A Thermal "Lumped" Particle Model of a lithium-ion battery.
+    % Models the ohmic, polarsation and soc distrbuted voltage losses.
+    % Assumes an Arrehnius type temperature dependance of the parameters.
+    
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 (Doodle moodle poodle)
+    % All Rights Reserved
+    % Software may be used freely for non-comercial purposes only
+    
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+        Hi = foundation.thermal.thermal; % H
+    end
+    
+    outputs
+        eta = {zeros(3,1) ,'V'}     % Over. pots
+        OCV = {3.75, 'V'}           % OCV
+        zbar = {1,'1'};             % Ave. SoC
+    end
+    
+    variables (Access = Protected)
+        v = {3.75, 'V'};            % Terminal voltage
+        i = { 0, 'A' };             % Current
+        T = {298, 'K'};             % Temperature
+        q = {0, 'W'};               % Heat flow rate
+        z = {ones(N,1),'1'}         % Dist. SoC
+        etaP = {0, 'V'};            % Polarisation overpotential
+        etaC = {0, 'V'};            % Concentration overpotential
+        Uh_bar = {0, 'V'};          % Hysteresis voltage at average SoC
+        Uh_z = {0, 'V'};            % Hysteresis voltage at boundary soc
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = right;               % +ve electrode terminal
+        n: Side = left;                % -ve electrode terminal
+        Hi: Side = top;                % Heat port
+        [zbar, OCV, eta]: Side = bottom; % Output signals
+        % Parameter tabs
+        UILayout = [UIGroup("Initial conditions", z0, T0)
+            UIGroup("Electrical", RoRef, TauRef, j0Ref, Cn)
+            UIGroup("Thermal", CpRef, Tref, Ea_Ro, Ea_Tau, Ea_j0, Ea_Cp)
+            UIGroup("Thermodynamics", refSoC, refOCV, refHys)];
+            Icon = 'iconTLPM.png';
+    end
+    
+    parameters
+        % Electrical and diffusion
+        RoRef = {10.6E-3,'Ohm'};   % Ref. Ohimic resistance, RoRef
+        TauRef = {992,'s'};        % Ref. SoC diffusion time constant, TauRef
+        Cn = {4,'A*hr'};           % Cell capacity, Cn
+        z0 = {1, '1'};             % Initial SoC, z0
+        j0Ref = {50.1,'A'};           % Ref. Ex. current, j0Ref
+        
+        % Thermal parameters
+        CpRef = {133.6, 'J/K'};    % Ref. Heat capacity, Cp
+        T0 = {298, 'K'};        % Initial temperature, T0
+        Tref = {298, 'K'};      % Arrhenius ref. temperature, Tref
+        Ea_j0 = {0, 'kJ/mol'}  % Activation energy, Ea_j0
+        Ea_Ro = {0, 'kJ/mol'}  % Activation energy, Ea_Ro
+        Ea_Tau = {13.07, 'kJ/mol'} % Activation energy, Ea_Tau
+        Ea_Cp = {26.84, 'kJ/mol'}  % Activation energy, Ea_Cp
+    end
+    
+    parameters (Access = private)
+        N = 6;                         % Number of collocation points
+        F = {96485.3329, 's*A/mol'};   % Faraday constant
+        R = {8.3144, 'J/K/mol'};       % Universal gas constant
+    end
+    
+    parameters (Size = variable)
+        refSoC = {[0:100]'/100 '1'}; % ref SoC break points
+        refOCV = {[2.8593,2.9274,2.9956,3.061969,...
+            3.12321216219110,3.15470394885229,3.18512081795661,3.21447466451004,...
+            3.23983418251859,3.25947590964635,3.27879990917066,3.29791977833839,...
+            3.31626752560394,3.33307563518842,3.34970466285667,3.36646662161759,...
+            3.38398642592777,3.39826374829121,3.41202994917722,3.42571088061970,...
+            3.43855191633442,3.45201772552158,3.46575676444741,3.47936243182409,...
+            3.49084733247506,3.50171432332238,3.51269575981572,3.52363960685895,...
+            3.53361623223110,3.54266659043136,3.55146484401725,3.56028882406785,...
+            3.57078460389872,3.58129525123674,3.59144125445442,3.60158725767211,...
+            3.61154584126950,3.62096628333315,3.63026578569043,3.63956528804771,...
+            3.64823659910672,3.65653982870753,3.66499745309439,3.67345507748124,...
+            3.68147228638747,3.68961276847631,3.69798562783594,3.70635848719557,...
+            3.71487037672799,3.72380783932121,3.73289437418429,3.74198090904738,...
+            3.75102505534397,3.76031929016191,3.76983942070008,3.77935955123825,...
+            3.78884224697143,3.79882047635899,3.80921579355511,3.81961111075122,...
+            3.83069866787416,3.84218843373057,3.85281884527956,3.86344925682856,...
+            3.87368999199300,3.88236944107510,3.89044668294659,3.89852392481808,...
+            3.90617127176311,3.91300386552967,3.92012910853992,3.92725435155017,...
+            3.93469242351412,3.94356346975952,3.95323912490892,3.96292857788519,...
+            3.97285467951706,3.98401645839863,3.99554115817453,4.00707749140522,...
+            4.01845667704757,4.02883766722974,4.03842441517684,4.04796117233550,...
+            4.05712383581582,4.06318824260145,4.06769338009974,4.07204669321773,...
+            4.07628315129213,4.07916567025178,4.08185911816602,4.08453654876338,...
+            4.08729968783335,4.09159374907186,4.09693239670873,4.10245989642775,...
+            4.10817746663332,4.12035945779669,4.13522550585792,4.15071368295431,...
+            4.16620186005070]', 'V'};  % ref OCV values
+        
+        refHys = {[0,0.00809086166374351,0.0161817233274871,0.0251526068883883,...
+            0.0367015925155099,0.0356911801319428,0.0341433089699380,...
+            0.0331269490833757,0.0341077534692550,0.0338234847673654,...
+            0.0333803522637539,0.0330392849384395,0.0330842785642081,...
+            0.0322110502309733,0.0312482809396216,0.0302190461019284,...
+            0.0288108884896098,0.0259996917324070,0.0229329342364915,...
+            0.0199088114623396,0.0173046365520727,0.0156772032972648,...
+            0.0141863849117885,0.0127622523008839,0.0123985030528369,...
+            0.0128143937354673,0.0132875072411102,0.0137794154718098,...
+            0.0147549345380479,0.0154229473844866,0.0159649079237399,...
+            0.0164940052306352,0.0161872026473993,0.0149002718913777,...
+            0.0134310190751904,0.0119617662590030,0.0105862232529627,...
+            0.00917288934192737,0.00769908557770873,0.00622528181349007,...
+            0.00506557369841154,0.00436110343763096,0.00373383056986782,...
+            0.00310655770210473,0.00269949257465061,0.00262293356249348,...
+            0.00266256318573108,0.00270219280896864,0.00267230734581283,...
+            0.00268785680578096,0.00277794240068401,0.00286802799558696,...
+            0.00297930787373981,0.00326973683235348,0.00367311365107572,...
+            0.00407649046979819,0.00449858469101296,0.00517207293031428,...
+            0.00605410507389075,0.00693613721746733,0.00747204939763264,...
+            0.00698073750190453,0.00605974845247270,0.00513875940304083,...
+            0.00441260854588679,0.00390336657946484,0.00309302100773488,...
+            0.00228267543600487,0.00168727732750080,0.00161453304798129,...
+            0.00168811339030879,0.00176169373263633,0.00167885959811260,...
+            0.00139483910263520,0.00151312305915317,0.00163830592911154,...
+            0.00164516447127263,0.00142340711119660,0.00138311019828017,...
+            0.00134863001276253,0.00139272362141565,0.00162149973189751,...
+            0.00145315472484744,0.00125981432357638,0.00125352076147771,...
+            0.00187171098945638,0.00171026657377156,0.00147290996793279,...
+            0.00129398088388668,0.00143483302840677,0.00148114965021744,...
+            0.00151945761359467,0.00151491134066863,0.00118787683359667,...
+            0.00138313552570795,0.00167282025888960,0.00186746974879219,...
+            0.000238606222445492,-4.82288549747523e-05,-2.39994148128808e-05,...
+            2.30025349168272e-07]'*2,'V'}; % ref hysteresis values     
+    end
+    
+    
+    branches
+        i : p.i -> n.i;
+        q : Hi.Q -> *;
+    end
+    
+    % Define N collocation points and N x N derivative matrix - N is 6 in this model
+    intermediates
+        xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1];
+        Dn = [-17	20.9442719099992	-5.78885438199983	3.05572809000084	-2.21114561800017	1;
+            -5.23606797749979	2.34164078649987	4	-1.78885438199983	1.23606797749979	-0.552786404500042;
+            1.44721359549996	-4	0.341640786499874	3.23606797749979	-1.78885438199983	0.763932022500210;
+            -0.763932022500210	1.78885438199983	-3.23606797749979	-0.341640786499874	4	-1.44721359549996;
+            0.552786404500042	-1.23606797749979	1.78885438199983	-4	-2.34164078649987	5.23606797749979;
+            -1	2.21114561800017	-3.05572809000084	5.78885438199983	-20.9442719099992	17];
+        dx = diff(xn);
+    end
+    
+    equations (Initial=true)
+        z == z0*ones(N,1);
+        T == T0;
+    end
+    
+    % Electrical and thermal equations
+    equations
+        let
+            j0 = j0Ref*exp(Ea_j0/R*(1/Tref-1/T))     % Arrhenius equation: j0
+            Ro = RoRef*exp(Ea_Ro/R*(1/T-1/Tref))     % Arrhenius type equation: Ro
+            Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))  % Arrhenius type equation: Tau
+            Cp = CpRef*exp(Ea_Cp/R*(1/Tref-1/T))     % Arrhenius equation: Cp
+            zDTmp = {Dn*z,'s*A/C'};
+            bc = Tau*i/Cn;                           % Nuemann boundary condition;
+            zD = [{0,'s*A/C'}; zDTmp(2:N-1); bc];    % Concatanation - with units because of B.C 
+            unitConv_FsA = {1,'C/(s*A)'};            % A unit conversiton variable
+            Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear);
+            Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);
+            Uh_bar_i = tablelookup(refSoC,refHys,zbar,extrapolation = linear);
+            Uh_z_i = tablelookup(refSoC,refHys,z(N),extrapolation = linear);
+            qf = (v-OCV)*i;                           % Heat source            
+            etaO = i*Ro;                              % Ohmic loss
+        in
+            % Electrical
+            v == p.v - n.v;
+            der(z) == Dn*zD/Tau * unitConv_FsA;                          % SoC diffusion
+            der(Uh_bar) == 0.005*((Uh_bar_i*sign(i))-Uh_bar)/Cn*abs(i);  % Hystereis potential at average SoC
+            der(Uh_z) == 0.005*((Uh_z_i*sign(i))-Uh_z)/Cn*abs(i);        % Hystereis potential at boundary SoC
+            zbar == 0.5*dx*[z(1:N-1)+z(2:N)];                            % Average SoC over x - trapezoidal integration
+            OCV == Ubar + Uh_bar;                                        % OCV + hysteresis
+            v == OCV + etaO + etaP + etaC;                               % Terminal voltage
+            sinh(F*etaP/(2*R*T)) == i/(2*j0);                            % Polarisation loss equation for etaP
+            etaC == (Uz+Uh_z) - OCV;                                     % Diffusion losses
+            eta == [etaO; etaP; etaC];                                   % Overpotential losses
+            
+            % Thermal
+            T == Hi.T;
+            Cp*der(T) == q + qf;                                         % Heat equation
+        end
+    end
+    
+    
+end
