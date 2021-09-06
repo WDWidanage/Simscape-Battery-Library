@@ -1,0 +1,58 @@
+component ElectricalSource
+    % Electrical Source : 2
+    % Specify an arbitrary input signal that either corresponds to a current
+    % voltage or power input
+    
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 25-06-2021 (A small step)
+    % All Rights Reserved
+    % Software may be used freely for non-comercial purposes only
+    
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+    end
+    
+    inputs
+        inputSignal = {0 ,'1'}     % Input
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = top;      % +ve terminal
+        n: Side = bottom;   % -ve terminal
+        
+        % Parameter tab
+        UILayout = [UIGroup("Input signal", inType)];
+        Icon = 'icons\iconGenerator.png';
+    end
+    
+    parameters
+        inType = insig.curr      % Input type
+    end
+    
+    variables (Access = Protected)
+        v = {0, 'V'};            % Voltage
+        i = {0, 'A' };           % Current
+    end
+    
+    branches
+        i : n.i -> p.i;
+    end
+    
+    equations
+        let
+            unitConv_A = {1,'A'};            % A unit conversiton variable
+            unitConv_V = {1,'V'};            % A unit conversiton variable
+            unitConv_W = {1,'W'};            % A unit conversiton variable
+        in
+            v == p.v - n.v;
+            if inType == insig.curr
+                i ==  inputSignal * unitConv_A;  
+            elseif inType == insig.vol
+                v ==  inputSignal * unitConv_V;
+            else
+                v*i == inputSignal * unitConv_W;
+            end
+        end
+    end
+end

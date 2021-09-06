@@ -1,0 +1,161 @@
+component TECMD
+    % TECMD : 1.5
+    % A TECM with diffusion of a lithium-ion battery.
+    % Models the ohmic, polarsation and soc distrbuted voltage losses.
+    % Assumes an Arrehnius type temperature dependance of the parameters.
+    
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 (Doodle moodle poodle)
+    % All Rights Reserved
+    % Software may be used freely for non-comercial purposes only
+    
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+        Hi = foundation.thermal.thermal; % H
+    end
+    
+    outputs
+        eta = {zeros(3,1) ,'V'}     % Losses
+        OCV = {3.75, 'V'}           % OCV
+        zbar = {1,'1'};             % SoC
+    end
+    
+    variables (Access = Protected)
+        v = {3.75, 'V'};            % Terminal voltage
+        i = {0, 'A' };              % Current
+        ir = {0, 'A' };             % Current through parallel RC branch
+        T = {298, 'K'};             % Temperature
+        q = {0, 'W'};               % Heat flow rate
+        z = {ones(N,1),'1'}         % Dist. SoC
+        etaO = {0, 'V'};            % Ohmic overpotential
+        etaP = {0, 'V'};            % Polarisation overpotential
+        etaC = {0, 'V'};            % Concentration overpotential
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = top;                   % +ve electrode terminal
+        n: Side = bottom;                % -ve electrode terminal
+        Hi: Side = left;                 % Heat port
+        [zbar, OCV, eta]: Side = right;  % Output signals
+        % Parameter tabs
+        UILayout = [UIGroup("Initial conditions", z0, T0)
+            UIGroup("Electrical", RoRef, RpRef, TaupRef, TauRef, Cn)
+            UIGroup("Thermal", Cp, Tref, Ea_Ro, Ea_Rp, Ea_Taup, Ea_Tau)
+            UIGroup("Thermodynamics", refSoC, refOCV)];
+        Icon = 'icons\iconTECMD.png';
+    end
+    
+    parameters
+        % Electrical and diffusion
+        RoRef = {12.5E-3,'Ohm'};      % Ref. Ohimic resistance, RoRef
+        RpRef = {20.8E-3,'Ohm'};      % Ref. Polarisation resistance, RpRef
+        TaupRef = {0.14,'s'};         % Ref. polarisation time constant, TaupRef
+        TauRef = {563.7,'s'};         % Ref. SoC diffusion time constant, TauRef
+        Cn = {4.9,'A*hr'};            % Cell capacity, Cn
+        z0 = {1, '1'};                % Initial SoC, z0
+        
+        % Thermal parameters
+        Cp = {100, 'J/K'};              % Heat capacity, Cp
+        Tref = {298, 'K'};              % Arrhenius ref. temperature, Tref
+        Ea_Ro = {8.013, 'kJ/mol'}       % Activation energy, Ea_Ro
+        Ea_Rp = {9.12, 'kJ/mol'}        % Activation energy, Ea_Rp
+        Ea_Taup = {9.79, 'kJ/mol'}      % Activation energy, Ea_Taup
+        Ea_Tau = {28.73, 'kJ/mol'}      % Activation energy, Ea_Tau
+        T0 = {298, 'K'};                % Initial temperature, T0
+    end
+    
+    parameters (Access = private)
+        N = 6;                        % Number of collocation points
+        F = {96485.3329, 's*A/mol'};  % Faraday constant
+        R = {8.3144, 'J/K/mol'};      % Universal gas constant
+    end
+    
+    parameters (Size = variable)
+        refSoC = {[0:100]'/100 '1'}; % ref SoC break points       
+        refOCV = {[2.87226666666667 2.96052812994699 3.02804006137187 3.09555199279676...
+            3.16306392422164 3.20012911144990 3.22684932876092 3.25356954607195...
+            3.28028976338298 3.30366251902926 3.32391086783852 3.34415921664777...
+            3.36440756545703 3.38337736980428 3.39585056120364 3.40808169748128...
+            3.42031283375891 3.43312236542483 3.44403277212358 3.45436831838031...
+            3.46470386463704 3.47489460441589 3.48578295282009 3.49716895836194...
+            3.50855496390379 3.51975057723135 3.52990789728309 3.54012269726924...
+            3.55033749725539 3.56053403978798 3.56876876393151 3.57634734074831...
+            3.58392591756512 3.59150449438192 3.59837651292555 3.60400711532064...
+            3.60963771771574 3.61526832011083 3.62087603938814 3.62605990154572...
+            3.63124376370329 3.63642762586086 3.64172472997681 3.64738310137943...
+            3.65304989960037 3.65871669782130 3.66472767182913 3.67174598798367...
+            3.67887773713650 3.68600948628932 3.69349161904363 3.70249532716030...
+            3.71181253382510 3.72112974048990 3.73077493215115 3.74281715264455...
+            3.75539849306634 3.76797983348813 3.78054451462135 3.79302677795269...
+            3.80637677297635 3.81972676800001 3.83307676302367 3.84456984787373...
+            3.85430164068239 3.86403343349106 3.87376522629972 3.88293282901064...
+            3.89107889951479 3.89922497001894 3.90737104052308 3.91557874276785...
+            3.92399213081386 3.93240787383325 3.94082361685263 3.94963150612215...
+            3.95966546646635 3.96983594392408 3.98000642138181 3.99032598576655...
+            4.00126821478467 4.01233626061718 4.02340430644969 4.03432201816434...
+            4.04382704177779 4.05280216094291 4.06177728010803 4.07065703360974...
+            4.07626015949775 4.08051431663774 4.08476847377773 4.08902263091772...
+            4.09345555380871 4.09831742254355 4.10317929127840 4.10804116001324...
+            4.11557909373630 4.12906316200268 4.14254723026907 4.15856111602972...
+            4.17532536875376]' 'V'};  % ref OCV value
+    end
+    
+    
+    branches
+        i : p.i -> n.i;
+        q : Hi.Q -> *;
+    end
+    
+    % Define N collocation points and N x N derivative matrix - N is 6 in this model
+    intermediates
+        xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1];
+        Dn = [-17	20.9442719099992	-5.78885438199983	3.05572809000084	-2.21114561800017	1;
+            -5.23606797749979	2.34164078649987	4	-1.78885438199983	1.23606797749979	-0.552786404500042;
+            1.44721359549996	-4	0.341640786499874	3.23606797749979	-1.78885438199983	0.763932022500210;
+            -0.763932022500210	1.78885438199983	-3.23606797749979	-0.341640786499874	4	-1.44721359549996;
+            0.552786404500042	-1.23606797749979	1.78885438199983	-4	-2.34164078649987	5.23606797749979;
+            -1	2.21114561800017	-3.05572809000084	5.78885438199983	-20.9442719099992	17];
+        dx = diff(xn);
+    end
+    
+    equations (Initial=true)
+        z == z0*ones(N,1);
+        T == T0;
+    end
+    
+    % Electrical and thermal equations
+    equations
+        let
+            Ro = RoRef*exp(Ea_Ro/R*(1/T-1/Tref))        % Arrhenius type equation: Ro
+            Rp = RpRef*exp(Ea_Rp/R*(1/T-1/Tref))        % Arrhenius type equation: Rp
+            Taup = TaupRef*exp(Ea_Taup/R*(1/T-1/Tref))  % Arrhenius type equation: Taup
+            Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau
+            zDTmp = {Dn*z,'s*A/C'};
+            bc = Tau*i/Cn;                           % Nuemann boundary condition;
+            zD = [{0,'s*A/C'}; zDTmp(2:N-1); bc];    % Concatanation - with units because of B.C 
+            unitConv_FsA = {1,'C/(s*A)'};            % A unit conversiton variable
+            Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear);
+            Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);
+            qf = (v-OCV)*i;                           % Heat source            
+        in
+            % Electrical
+            v == p.v - n.v;
+            der(z) == Dn*zD/Tau * unitConv_FsA;                          % SoC diffusion
+            zbar == 0.5*dx*[z(1:N-1)+z(2:N)];                            % Average SoC over x - trapezoidal integration
+            der(ir) == (i-ir)/Taup;                                      % Current through Rp in RC branch
+            OCV == Ubar ;                                                % OCV
+            v == OCV + etaO + etaP + etaC;                               % Terminal voltage
+            etaO == i*Ro;                                                % Ohmic loss
+            etaP == Rp*ir;                                               % Polarisation loss
+            etaC == Uz - OCV;                                            % Diffusion losses
+            eta == [etaO; etaP; etaC];                                   % Overpotential losses
+            
+            % Thermal
+            T == Hi.T;
+            Cp*der(T) == q + qf;                                         % Heat equation
+        end
+    end
+    
+    
+end

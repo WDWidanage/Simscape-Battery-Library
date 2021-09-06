@@ -1,0 +1,126 @@
+component BatteryCycler
+    % A simple battery cycler : 1.5
+    % Performs cycles of CCCV charge -> Rest -> CC discharge -> Rest 
+    
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 22-08-2022 (Trying)
+    % All Rights Reserved
+    % Software may be used freely for non-comercial purposes only
+    
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = top;      % +ve terminal
+        n: Side = bottom;   % -ve terminal
+        
+        % Parameter tab
+        UILayout = [UIGroup("Charge-discharge specifications", Vmax,Vmin,Ic,Ico,Id,tRestC,tRestD)];
+        Icon = 'icons\iconCharger.png';
+    end
+    
+    parameters
+        Ic = {1,'A'};      % Charge current, Ic
+        Id = {-1,'A'};     % Discharge current, Id
+        Vmax = {4.2,'V'};  % Cut-off voltage, Vmax
+        Vmin = {2.5,'V'};  % Cut-off voltage, Vmin
+        Ico = {0.25,'A'};  % Cut-off current, Ico
+        tRestC = {0,'s'};  % Rest after charge, tRestC
+        tRestD = {0,'s'};  % Rest after discharge, tRestD
+    end
+    
+    outputs
+       % Track number of cycles completed 
+       numCyc = {0,'1'}; % Cyc#
+    end
+    
+    variables (Access = Protected)
+        v = {3.75, 'V'};         % Voltage
+        i = {0, 'A' };           % Current
+    end
+    
+    % Five cycling states 
+    variables (Event = true, Access = Protected)
+        x_C = 1;                 % 1. CC charge state (starting state)
+        x_CV = 0;                % 2. CV state
+        x_restC = 0;             % 3. Charge rest state
+        x_D = 0;                 % 4. CC discharge state
+        x_restD = 0;             % 5. Discharge rest state
+        tRef = {0,'s'};          % A reference time point
+        cycCount = {0, '1'};     % Cycle counter state
+    end
+    
+    branches
+        i : n.i -> p.i;
+    end
+    
+    events
+        when initialevent
+            x_C = 1;        % Start with a CC charge
+            x_CV = 0;
+            x_restC = 0;
+            x_D = 0;
+            x_restD = 0;
+            cycCount = -1;  % Start with -1, since battery charging starts with a partial charge
+                            % One cycle is from fully charge back to being fully charged
+        elsewhen edge(v > Vmax)                          
+            x_C = 0;      
+            x_CV = 1;       % Start CV charge
+            x_restC = 0;
+            x_D = 0;
+            x_restD = 0;
+            cycCount = cycCount + 1;
+        elsewhen edge(i < Ico)                           
+            x_C = 0;
+            x_CV = 0;  
+            x_restC = 1;    % Start charge rest
+            x_D = 0;
+            x_restD = 0;
+            tRef = time;
+        elsewhen (edge(time > (tRef + tRestC)) && x_restC == 1)
+            x_C = 0;
+            x_CV = 0;
+            x_restC = 0;
+            x_D = 1;        % Start CC discharge
+            x_restD = 0;
+        elsewhen edge(v < Vmin)                                    
+            x_C = 0;     
+            x_CV = 0;
+            x_restC = 0;
+            x_D = 0;
+            x_restD = 1;    % Start discharge rest
+            tRef = time;
+        elsewhen (edge(time > (tRef + tRestD)) && x_restD == 1)
+            x_C = 1;        % Start CC charge
+            x_CV = 0;
+            x_restC = 0;
+            x_D = 0;
+            x_restD = 0;
+        end
+    end
+    
+    equations
+        v == p.v - n.v;
+        if x_C == 1         % CC charge
+            i == Ic;   
+            numCyc == cycCount;
+        elseif x_CV == 1    % CV charge 
+            v == Vmax;
+            numCyc == cycCount;
+        elseif x_restC == 1 % Rest after CCCV charge
+            i == 0;
+            numCyc == cycCount;
+        elseif x_D == 1     % CC discharge
+            i == Id;
+            numCyc == cycCount;
+        elseif x_restD == 1 % Rest after discharge
+            i == 0;  
+            numCyc == cycCount;
+        else                                                               
+            i == Ic; 
+            numCyc == cycCount;
+        end
+    end
+end
