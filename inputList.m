@@ -1,4 +1,4 @@
-classdef insig < int32
+classdef inputList < int32
     enumeration
         curr (0)
         vol (1)

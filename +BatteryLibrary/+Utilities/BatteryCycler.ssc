@@ -1,6 +1,6 @@
 component BatteryCycler
     % A simple battery cycler : 1.5
-    % Performs cycles of CCCV charge -> Rest -> CC discharge -> Rest 
+    % Performs cycles of CCCV charge -> Rest -> CC discharge -> Rest
     
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 22-08-2022 (Trying)
     % All Rights Reserved
@@ -32,8 +32,8 @@ component BatteryCycler
     end
     
     outputs
-       % Track number of cycles completed 
-       numCyc = {0,'1'}; % Cyc#
+        % Track number of cycles completed
+        numCyc = {0,'1'}; % Cyc#
     end
     
     variables (Access = Protected)
@@ -41,7 +41,7 @@ component BatteryCycler
         i = {0, 'A' };           % Current
     end
     
-    % Five cycling states 
+    % Five cycling states
     variables (Event = true, Access = Protected)
         x_C = 1;                 % 1. CC charge state (starting state)
         x_CV = 0;                % 2. CV state
@@ -64,20 +64,20 @@ component BatteryCycler
             x_D = 0;
             x_restD = 0;
             cycCount = -1;  % Start with -1, since battery charging starts with a partial charge
-                            % One cycle is from fully charge back to being fully charged
-        elsewhen edge(v > Vmax)                          
-            x_C = 0;      
+                           % One cycle is from fully charge back to being fully charged CCCV
+        elsewhen edge(v > Vmax)
+            x_C = 0;
             x_CV = 1;       % Start CV charge
             x_restC = 0;
             x_D = 0;
             x_restD = 0;
-            cycCount = cycCount + 1;
-        elsewhen edge(i < Ico)                           
+        elsewhen edge(i < Ico)
             x_C = 0;
-            x_CV = 0;  
+            x_CV = 0;
             x_restC = 1;    % Start charge rest
             x_D = 0;
             x_restD = 0;
+            cycCount = cycCount + 1;
             tRef = time;
         elsewhen (edge(time > (tRef + tRestC)) && x_restC == 1)
             x_C = 0;
@@ -85,8 +85,8 @@ component BatteryCycler
             x_restC = 0;
             x_D = 1;        % Start CC discharge
             x_restD = 0;
-        elsewhen edge(v < Vmin)                                    
-            x_C = 0;     
+        elsewhen edge(v < Vmin)
+            x_C = 0;
             x_CV = 0;
             x_restC = 0;
             x_D = 0;
@@ -104,11 +104,19 @@ component BatteryCycler
     equations
         v == p.v - n.v;
         if x_C == 1         % CC charge
-            i == Ic;   
-            numCyc == cycCount;
-        elseif x_CV == 1    % CV charge 
+            i == Ic;
+            if cycCount > -1
+                numCyc == cycCount;
+            else
+                numCyc == 0;
+            end
+        elseif x_CV == 1    % CV charge
             v == Vmax;
-            numCyc == cycCount;
+            if cycCount > -1
+                numCyc == cycCount;
+            else
+                numCyc == 0;
+            end
         elseif x_restC == 1 % Rest after CCCV charge
             i == 0;
             numCyc == cycCount;
@@ -116,10 +124,10 @@ component BatteryCycler
             i == Id;
             numCyc == cycCount;
         elseif x_restD == 1 % Rest after discharge
-            i == 0;  
+            i == 0;
             numCyc == cycCount;
-        else                                                               
-            i == Ic; 
+        else
+            i == Ic;
             numCyc == cycCount;
         end
     end

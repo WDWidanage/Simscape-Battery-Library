@@ -2,7 +2,7 @@ component TSPMe
     % TSPMe : 1.5
     % A Thermal Single Particle Model with electrolyte of a lithium-ion battery.
     % Models the electrodes and electrolyte distrbuted voltage losses.
-    % Assumes an Arrehnius type temperature dependance of the parameters.
+    % Assumes an Arrehnius temperature dependance of the parameters.
     
     % The equations and parameters used are from the following two papers - any other papers used will be directly cited in the comments
     %   Ref#1 Model: Planella2021, https://doi.org/10.1016/j.electacta.2021.138524.
@@ -35,8 +35,8 @@ component TSPMe
     end
     
     outputs
-        % Cell SoC
-        zBar = {1, '1'};                % SoC
+        % Cell SoC - Positve electrode surface soc
+        z = {1, '1'};                % SoC
         
         % Concatanation of +ve, OCV and -ve electrode potentials 
         pots = {[4.3;4.1;0.2],'V'};  % Pots 
@@ -80,8 +80,8 @@ component TSPMe
     
     parameters
         % Initial conditions
-        z0 = {1, '1'};                % Initial SoC, z0
-        Cn = {5,'A*hr'};              % Cell capacity, Cn
+        z0 = {1, '1'};                  % Initial SoC, z0
+        Cn = {4.9,'A*hr'};              % Cell capacity, Cn
         
         % Transport
         DnRef = {3.3E-14, 'm^2/s'};     % Ref. solid diff. coeff. -ve, DnRef
@@ -113,7 +113,6 @@ component TSPMe
         Ea_Dp = {10, 'kJ/mol'}          % Pos. diff. coeff. activation energy, Ea_Dp        
         Ea_De = {1.2, 'kJ/mol'}          % Elec. diff. coeff. activation energy, Ea_De
         Ea_sigmae = {80, 'kJ/mol'}      % Elec. cond. activation energy, Ea_sigmae
-        % 9.98588911698790	79.6036436556534	1.16823410214111	43.5967658579742
         
         % Domain geometry
         Ln = {85.2, 'um'};       % Negative electrode thickness, Ln
@@ -182,7 +181,7 @@ component TSPMe
         D6s = 2*D6/ls;                % Corresponding derivative matrix for separator
         D10p = 2*D10/lp;              % Corresponding derivative matrix for +ve electrode
         
-        % Collocation points on standard interval [-1,1]
+        % Collocation points on standard interval [-1,1], Particle radius and electrodes: 10, separator: 6.
         s6 = [-1	-0.809016994374948	-0.309016994374947	0.309016994374947	0.809016994374948	1]                                                     % Six collocation points on standard interval [-1,1]                                                                                                                                   % Three collocation points on standard interval [-1,1]
         s10 = [-1	-0.939692620785908	-0.766044443118978	-0.5	-0.173648177666930	0.173648177666930	0.5	0.766044443118978	0.939692620785908	1] % Ten collocation points on standard interval [-1,1]
         
@@ -205,7 +204,8 @@ component TSPMe
             0.257772801031441	-0.532088886237956	0.586256827714545	-0.694592710667721	0.898197570222574	-1.30540728933228	2.27431608520651	-5.75877048314363	-4.01654328417507	8.29085936938158;
             -0.500000000000000	1.03109120412576	-1.13247433143179	1.33333333333333	-1.70408819104185	2.42027662546121	-4.00000000000000	8.54863217041303	-33.1634374775263	27.1666666666667]; % Derivative matrix with ten collocation points
         
-        % Integration matrices and differences (for electrolyte potential)
+        % Integration matrices and differences (for electrolyte potential) and average particle concentration
+        dr = diff(r);
         dxn = diff(xn);
         dxs = diff(xs);
         dxp = diff(xp);
@@ -292,6 +292,8 @@ component TSPMe
             dcdt0_p = 3*DD_p*dc2dr2_p(1);                                            % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
             dcdtInt_p = DD_p*dc2dr2_p(2:nR)+2*DD_p*dcdr_p(2:nR)./r(2:nR)';           % Governing equations at rest of the solid domain - expanded form of spherical diffusion
             dcdt_p = [dcdt0_p; dcdtInt_p];                                           % Complete set of goverening equations
+            int_cp_hat = sum(0.5*dr'.*(cp_hat(1:nR-1)+cp_hat(2:nR)));                % Trapezoidal integration of positive electrode concentration for average cell SoC caluclation
+            
             
             % Terms for -ve electrode solid diff (Ref#1 eq B.14)
             dcdr_nTmp = D10r*cn_hat;                                                 % Spatial derivative approximation: -ve electrode conc.
@@ -338,8 +340,7 @@ component TSPMe
             % Thermodynamics
             sp == cp_hat(nR); % +ve stoic.
             sn == cn_hat(nR); % -ve stoic.
-            zBar == (sp_max - sum(cp_hat)/nR)/(sp_max - sp_min);  % Solve for zBar, average cell SoC
-
+            z == (sp_max - cp_hat(nR))/(sp_max - sp_min);  % Cell soc,  positve electrode surface soc
             
             % Solid diffusion: Dimensionless in all variables except time (by multiplying by t0)
             t0*CC_p*der(cp_hat) == dcdt_p           % Solve for cp_hat (Ref#1 eq B.14a)
@@ -372,7 +373,7 @@ component TSPMe
             Phip_CC == Phi0*(etap_hat(nE)/lambda + Up + 2*(1-tr)*log(cep_hat(nE)/cen_hat(1))/lambda) + (Lp+2*Ls+Ln)/(2*sigma_e)*i_hat*i0;   % Positive electrode potential at current collector ((Ref#1 eq. A.6m put back into dimensional form, with electrolyte potential at positive current collector from eq B.18)
            
             v == Phip_CC - Phin_CC;         % Terminal voltage            
-            pots == [Phip_CC;U;Phin_CC];    % Potentials as an output signal
+            pots == [Phip_CC;U;Phin_CC];    % Potentials as an output signal. Concatanation of +ve, OCV and -ve electrode potentials 
             
             % Thermal
             T == Hi.T;

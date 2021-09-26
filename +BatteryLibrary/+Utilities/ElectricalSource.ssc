@@ -1,5 +1,5 @@
 component ElectricalSource
-    % Electrical Source : 2
+    % Electrical Source : 1.5
     % Specify an arbitrary input signal that either corresponds to a current
     % voltage or power input
     
@@ -27,7 +27,7 @@ component ElectricalSource
     end
     
     parameters
-        inType = insig.curr      % Input type
+        inType = inputList.curr      % Input type
     end
     
     variables (Access = Protected)
@@ -46,9 +46,9 @@ component ElectricalSource
             unitConv_W = {1,'W'};            % A unit conversiton variable
         in
             v == p.v - n.v;
-            if inType == insig.curr
+            if inType == inputList.curr
                 i ==  inputSignal * unitConv_A;  
-            elseif inType == insig.vol
+            elseif inType == inputList.vol
                 v ==  inputSignal * unitConv_V;
             else
                 v*i == inputSignal * unitConv_W;

@@ -51,17 +51,17 @@ component TECMD
         RoRef = {12.5E-3,'Ohm'};      % Ref. Ohimic resistance, RoRef
         RpRef = {20.8E-3,'Ohm'};      % Ref. Polarisation resistance, RpRef
         TaupRef = {0.14,'s'};         % Ref. polarisation time constant, TaupRef
-        TauRef = {563.7,'s'};         % Ref. SoC diffusion time constant, TauRef
+        TauRef = {580,'s'};           % Ref. SoC diffusion time constant, TauRef
         Cn = {4.9,'A*hr'};            % Cell capacity, Cn
         z0 = {1, '1'};                % Initial SoC, z0
         
         % Thermal parameters
-        Cp = {100, 'J/K'};              % Heat capacity, Cp
+        Cp = {110, 'J/K'};              % Heat capacity, Cp
         Tref = {298, 'K'};              % Arrhenius ref. temperature, Tref
         Ea_Ro = {8.013, 'kJ/mol'}       % Activation energy, Ea_Ro
         Ea_Rp = {9.12, 'kJ/mol'}        % Activation energy, Ea_Rp
         Ea_Taup = {9.79, 'kJ/mol'}      % Activation energy, Ea_Taup
-        Ea_Tau = {28.73, 'kJ/mol'}      % Activation energy, Ea_Tau
+        Ea_Tau = {27, 'kJ/mol'}         % Activation energy, Ea_Tau
         T0 = {298, 'K'};                % Initial temperature, T0
     end
     
@@ -69,10 +69,20 @@ component TECMD
         N = 6;                        % Number of collocation points
         F = {96485.3329, 's*A/mol'};  % Faraday constant
         R = {8.3144, 'J/K/mol'};      % Universal gas constant
+        
+        % Define N collocation points and N x N derivative matrix - N is 6 in this model
+        xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1];                   % Collocation points for distributed SoC
+        Dn = [-17	20.9442719099992	-5.78885438199983	3.05572809000084	-2.21114561800017	1;
+            -5.23606797749979	2.34164078649987	4	-1.78885438199983	1.23606797749979	-0.552786404500042;
+            1.44721359549996	-4	0.341640786499874	3.23606797749979	-1.78885438199983	0.763932022500210;
+            -0.763932022500210	1.78885438199983	-3.23606797749979	-0.341640786499874	4	-1.44721359549996;
+            0.552786404500042	-1.23606797749979	1.78885438199983	-4	-2.34164078649987	5.23606797749979;
+            -1	2.21114561800017	-3.05572809000084	5.78885438199983	-20.9442719099992	17];                % Derivative matrix 
+        dx = diff(xn);
     end
     
     parameters (Size = variable)
-        refSoC = {[0:100]'/100 '1'}; % ref SoC break points       
+        refSoC = {[0:100]'/100 '1'}; % ref SoC break points
         refOCV = {[2.87226666666667 2.96052812994699 3.02804006137187 3.09555199279676...
             3.16306392422164 3.20012911144990 3.22684932876092 3.25356954607195...
             3.28028976338298 3.30366251902926 3.32391086783852 3.34415921664777...
@@ -107,16 +117,13 @@ component TECMD
         q : Hi.Q -> *;
     end
     
-    % Define N collocation points and N x N derivative matrix - N is 6 in this model
-    intermediates
-        xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1];
-        Dn = [-17	20.9442719099992	-5.78885438199983	3.05572809000084	-2.21114561800017	1;
-            -5.23606797749979	2.34164078649987	4	-1.78885438199983	1.23606797749979	-0.552786404500042;
-            1.44721359549996	-4	0.341640786499874	3.23606797749979	-1.78885438199983	0.763932022500210;
-            -0.763932022500210	1.78885438199983	-3.23606797749979	-0.341640786499874	4	-1.44721359549996;
-            0.552786404500042	-1.23606797749979	1.78885438199983	-4	-2.34164078649987	5.23606797749979;
-            -1	2.21114561800017	-3.05572809000084	5.78885438199983	-20.9442719099992	17];
-        dx = diff(xn);
+    intermediates % Functional parameters: OCV and temperature dependent parameters
+        Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear); % OCV at average SoC
+        Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);    % OCV at surface SoC
+        Ro = RoRef*exp(Ea_Ro/R*(1/T-1/Tref))        % Arrhenius type equation: Ro
+        Rp = RpRef*exp(Ea_Rp/R*(1/T-1/Tref))        % Arrhenius type equation: Rp
+        Taup = TaupRef*exp(Ea_Taup/R*(1/T-1/Tref))  % Arrhenius type equation: Taup
+        Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau        
     end
     
     equations (Initial=true)
@@ -127,17 +134,11 @@ component TECMD
     % Electrical and thermal equations
     equations
         let
-            Ro = RoRef*exp(Ea_Ro/R*(1/T-1/Tref))        % Arrhenius type equation: Ro
-            Rp = RpRef*exp(Ea_Rp/R*(1/T-1/Tref))        % Arrhenius type equation: Rp
-            Taup = TaupRef*exp(Ea_Taup/R*(1/T-1/Tref))  % Arrhenius type equation: Taup
-            Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau
-            zDTmp = {Dn*z,'s*A/C'};
+            zDTmp = {Dn*z,'s*A/C'};                  % Spatial derivative of SoC
             bc = Tau*i/Cn;                           % Nuemann boundary condition;
-            zD = [{0,'s*A/C'}; zDTmp(2:N-1); bc];    % Concatanation - with units because of B.C 
+            zD = [{0,'s*A/C'}; zDTmp(2:N-1); bc];    % Concatanation - with units because of B.C
             unitConv_FsA = {1,'C/(s*A)'};            % A unit conversiton variable
-            Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear);
-            Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);
-            qf = (v-OCV)*i;                           % Heat source            
+            qf = (v-OCV)*i;                          % Heat source
         in
             % Electrical
             v == p.v - n.v;
