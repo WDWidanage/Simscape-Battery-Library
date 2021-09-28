@@ -6,7 +6,6 @@ component TECMD
     
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 (Doodle moodle poodle)
     % All Rights Reserved
-    % Software may be used freely for non-comercial purposes only
     
     nodes
         p = foundation.electrical.electrical; % +

@@ -10,7 +10,6 @@ component TSPMe
     %
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 28-06-2021 (Pneuma)
     % All Rights Reserved
-    % Software may be used freely for non-comercial purposes only
     
     nodes
         p = foundation.electrical.electrical; % +
