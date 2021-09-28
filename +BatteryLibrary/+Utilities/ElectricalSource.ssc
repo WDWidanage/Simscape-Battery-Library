@@ -27,7 +27,7 @@ component ElectricalSource
     end
     
     parameters
-        inType = inputList.curr      % Input type
+        inType = {0, '1'}      % Input choice: Current: 0, Voltage: 1, Power: 2
     end
     
     variables (Access = Protected)
@@ -46,9 +46,9 @@ component ElectricalSource
             unitConv_W = {1,'W'};            % A unit conversiton variable
         in
             v == p.v - n.v;
-            if inType == inputList.curr
+            if inType == 0
                 i ==  inputSignal * unitConv_A;  
-            elseif inType == inputList.vol
+            elseif inType == 1
                 v ==  inputSignal * unitConv_V;
             else
                 v*i == inputSignal * unitConv_W;

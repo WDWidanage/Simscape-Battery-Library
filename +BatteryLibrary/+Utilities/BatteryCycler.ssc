@@ -4,7 +4,6 @@ component BatteryCycler
     
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 22-08-2022 (Trying)
     % All Rights Reserved
-    % Software may be used freely for non-comercial purposes only
     
     nodes
         p = foundation.electrical.electrical; % +
@@ -64,7 +63,7 @@ component BatteryCycler
             x_D = 0;
             x_restD = 0;
             cycCount = -1;  % Start with -1, since battery charging starts with a partial charge
-                           % One cycle is from fully charge back to being fully charged CCCV
+                            % One cycle is from fully charge back to being fully charged CCCV
         elsewhen edge(v > Vmax)
             x_C = 0;
             x_CV = 1;       % Start CV charge
