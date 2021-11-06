@@ -84,7 +84,7 @@ component TSPMe
         
         % Transport
         DnRef = {3.3E-14, 'm^2/s'};     % Ref. solid diff. coeff. -ve, DnRef
-        DpRef = {4E-15, 'm^2/s'};       % Ref. solid diff. coeff. +ve, DpRef
+        DpRef = {4E-15, 'm^2/s'};       % Ref. solid Therdiff. coeff. +ve, DpRef
         cn_max = {33133, 'mol/m^3'}     % Maximum -ve particle conc. cn_max
         cp_max = {63104, 'mol/m^3'}     % Maximum +ve particle conc. cp_max
         tr = {0.2594, '1'};             % Transference number, tr
@@ -110,7 +110,7 @@ component TSPMe
         Ea_kp = {1, 'kJ/mol'}           % Pos. reaction rate activation energy, Ea_kp      
         Ea_Dn = {75, 'kJ/mol'}          % Neg. diff. coeff. activation energy, Ea_Dn
         Ea_Dp = {10, 'kJ/mol'}          % Pos. diff. coeff. activation energy, Ea_Dp        
-        Ea_De = {1.2, 'kJ/mol'}          % Elec. diff. coeff. activation energy, Ea_De
+        Ea_De = {1.2, 'kJ/mol'}         % Elec. diff. coeff. activation energy, Ea_De
         Ea_sigmae = {80, 'kJ/mol'}      % Elec. cond. activation energy, Ea_sigmae
         
         % Domain geometry
@@ -253,14 +253,14 @@ component TSPMe
         DD_es = Des/DeTyp;              % Dimensionless separator electrolyte diffusion coefficients (Ref#1 eq A.4)
         DD_ep = Dep/DeTyp;              % Dimensionless positve electrolyte diffusion coefficients (Ref#1 eq A.4)
 
-        ss_en =  sigma_en/sigma_e;      % Dimensionless negative electrolyte conductivity coefficients (Ref#1 eq A.4)
-        ss_es =  sigma_es/sigma_e;      % Dimensionless separator electrolyte conductivity coefficients (Ref#1 eq A.4) 
-        ss_ep =  sigma_ep/sigma_e;      % Dimensionless positive electrolyte conductivity coefficients (Ref#1 eq A.4)
+        ss_en =  sigma_en/sigma_eRef;      % Dimensionless negative electrolyte conductivity coefficients (Ref#1 eq A.4)
+        ss_es =  sigma_es/sigma_eRef;      % Dimensionless separator electrolyte conductivity coefficients (Ref#1 eq A.4) 
+        ss_ep =  sigma_ep/sigma_eRef;      % Dimensionless positive electrolyte conductivity coefficients (Ref#1 eq A.4)
                
         % Non-dimensional parameters 
-        CC_rn = F/(kn*an*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
-        CC_rp = F/(kp*ap*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
-        Sigma_e = R*Tref*sigma_e/(F*L*i0);  % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)       
+        CC_rn = F/(knRef*an*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        CC_rp = F/(kpRef*ap*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        Sigma_e = R*Tref*sigma_eRef/(F*L*i0);  % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)       
 
     end
     
