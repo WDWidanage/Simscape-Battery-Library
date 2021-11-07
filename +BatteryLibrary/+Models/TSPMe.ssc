@@ -258,9 +258,9 @@ component TSPMe
         ss_ep =  sigma_ep/sigma_eRef;      % Dimensionless positive electrolyte conductivity coefficients (Ref#1 eq A.4)
                
         % Non-dimensional parameters 
-        CC_rn = F/(knRef*an*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
-        CC_rp = F/(kpRef*ap*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
-        Sigma_e = R*Tref*sigma_eRef/(F*L*i0);  % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)       
+        CC_rn = F/(kn*an*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        CC_rp = F/(kp*ap*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        Sigma_e = R*Tref*sigma_e/(F*L*i0);  % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)       
 
     end
     
