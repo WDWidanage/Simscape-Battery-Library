@@ -2,8 +2,7 @@ function [thetaOpt, paraInfo, vFit] = EstECMPara(t,u,v,varargin)
 % Estimate the parameters of an ECM. Postive current is assumed as
 % discharge
 %
-% W.D. Widanage 07/01/2016 (Fade to Black)
-% W.D. Widanage 21/12/2018 (Aint my ****)
+% W.D. Widanage 21/12/2018
 
 p = inputParser; % Create an input parse object to handle positional and property-value arguments
 
