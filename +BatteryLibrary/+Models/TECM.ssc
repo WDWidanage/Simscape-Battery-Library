@@ -26,7 +26,6 @@ component TECM
         ir = {0, 'A' };             % Current through parallel RC branch
         T = {298, 'K'};             % Temperature
         q = {0, 'W'};               % Heat flow rate
-        %z = {1,'1'}                 % SoC
         etaO = {0, 'V'};            % Ohmic overpotential
         etaP = {0, 'V'};            % Polarisation overpotential
 
@@ -43,7 +42,7 @@ component TECM
         [z, OCV, eta]: Side = right;     % Output signals
         % Parameter tabs
         UILayout = [UIGroup("Initial conditions", z0, T0)
-            UIGroup("Electrical", Cn, RoLUT_d, RpLUT_d, TauLUT_d, RoLUT_c, RpLUT_c, TauLUT_c, tempLUT, socLUT)
+            UIGroup("Electrical", Cn, RoLUT, RpLUT, TauLUT, tempLUT, socLUT)
             UIGroup("Thermal", Cp)
             UIGroup("Thermodynamics", refSoC, refOCV)];
         Icon = 'icons\iconTECM.png';
@@ -65,36 +64,23 @@ component TECM
         refOCV = {[3.32	3.33	3.34	3.35	3.35	3.36	3.38	3.39	3.40	3.42	3.43	3.44	3.45	3.46	3.47	3.48	3.49	3.50	3.51	3.52	3.52	3.53	3.54	3.54	3.55	3.55	3.56	3.56	3.57	3.57	3.58	3.58	3.59	3.59	3.60	3.60	3.61	3.61	3.62	3.62	3.63	3.63	3.64	3.64	3.65	3.65	3.66	3.67	3.68	3.69	3.70	3.71	3.72	3.74	3.75	3.76	3.76	3.77	3.78	3.79	3.80	3.81	3.81	3.82	3.83	3.84	3.85	3.85	3.86	3.87	3.88	3.88	3.89	3.90	3.90	3.91	3.92	3.93	3.94	3.94	3.95	3.96	3.97	3.98	3.99	4.00	4.01	4.02	4.03	4.04	4.05	4.06	4.07	4.08	4.09	4.10	4.11	4.12	4.13	4.14	4.15]' 'V'};  % ref OCV value
 
 
-        tempLUT = {[273, 283, 298, 318],'K'};
-        socLUT = {[20.79	50.50	80.20	95.05], '1'}
+        tempLUT = {[273, 283, 298, 318]','K'};                               % Temperature LUT
+        socLUT = {[20.79	50.50	80.20	95.05]'/100, '1'}                % SoC LUT
         
         % Discharge parameters. Temperature (rows) vs SoC (columns) 
-        RoLUT_d = {[1.16E-01	9.70E-02	9.79E-02	1.11E-01;
+        RoLUT = {[1.16E-01	9.70E-02	9.79E-02	1.11E-01;
                     7.90E-02	6.17E-02	6.36E-02	7.08E-02;
                     5.26E-02	4.24E-02	4.38E-02	4.83E-02;
-                    3.39E-02	3.14E-02	3.25E-02	3.38E-02],'Ohm'}; % Discharge Ohimic resistance, RoLUT_d
-        RpLUT_d = {[1.53E-01	3.50E-02	7.38E-02	5.10E-02;
+                    3.39E-02	3.14E-02	3.25E-02	3.38E-02],'Ohm'};   % Ohimic resistance LUT, RoLUT
+        RpLUT = {[1.53E-01	3.50E-02	7.38E-02	5.10E-02;
                     4.30E-02	3.23E-02	5.32E-02	4.01E-02;
                     2.93E-02	1.97E-02	3.57E-02	2.10E-02;
-                    1.24E-02	8.55E-03	1.83E-02	9.74E-03],'Ohm'}; % Discharge polarisation resistance, RpLUT_d
-        TauLUT_d = {[3.42E+00	3.83E+01	6.68E+01	3.85E+01;
+                    1.24E-02	8.55E-03	1.83E-02	9.74E-03],'Ohm'};   % Polarisation resistance LUT, RpLUT
+        TauLUT = {[3.42E+00	3.83E+01	6.68E+01	3.85E+01;
                      3.19E+00	4.69E+01	5.96E+01	3.75E+01;
                      4.71E+01	4.13E+01	6.39E+01	3.20E+01;
-                     2.32E+01	1.96E+01	4.12E+01	1.61E+01],'s'}; % Discharge time constant, TauLUT_d
+                     2.32E+01	1.96E+01	4.12E+01	1.61E+01],'s'};     % Time constant LUT, TauLUT
         
-        % Charge parameters. Temperature (rows) vs SoC (columns) 
-        RoLUT_c = {[1.24E-01	1.02E-01	1.24E-01	1.76E-01;
-                    7.35E-02	6.27E-02	7.40E-02	1.15E-01;
-                    4.77E-02	4.29E-02	4.75E-02	5.74E-02;
-                    3.32E-02	3.18E-02	3.55E-02	4.30E-02],'Ohm'}; % Charge Ohimic resistance, RoLUT_c
-        RpLUT_c = {[6.09E-02	5.07E-02	7.48E-02	8.04E-02;
-                    2.75E-02	2.54E-02	3.33E-02	4.51E-02;
-                    1.67E-02	1.82E-02	1.73E-02	2.04E-02;
-                    1.24E-02	1.39E-02	1.15E-02	1.35E-02],'Ohm'}; % Charge polarisation resistance, RpLUT_c
-        TauLUT_c = {[2.23E+01	5.39E+01	1.35E+02	1.23E+02;
-                     2.20E+01	3.26E+01	6.73E+01	6.52E+01;
-                     2.40E+01	2.98E+01	4.30E+01	4.75E+01;
-                     2.37E+01	3.42E+01	6.38E+01	2.00E+02],'s'}; % Charge time constant, TauLUT_c
     end
     
     
@@ -116,19 +102,13 @@ component TECM
     % Electrical and thermal equations
     equations
         let          
-            qf = (v-OCV)*i;                          % Heat source
+            qf = (v-OCV)*i;                           % Heat source
         in
-            if i>0                                   % Assume postive current as charging
-                % Charge parameter interpolations
-                Ro == tablelookup(tempLUT,socLUT, RoLUT_c, T,z ,extrapolation = nearest);       % RoC at cell temperature and SoC
-                Rp == tablelookup(tempLUT,socLUT, RpLUT_c, T,z ,extrapolation = nearest);       % RpC at cell temperature and SoC
-                Taup == tablelookup(tempLUT,socLUT, TauLUT_c, T,z ,extrapolation = nearest);    % TauC at cell temperature and SoC
-            else
-                % Discharge parameter interpolations
-                Ro == tablelookup(tempLUT,socLUT, RoLUT_d, T,z ,extrapolation = nearest);       % RoD at cell temperature and SoC
-                Rp == tablelookup(tempLUT,socLUT, RpLUT_d, T,z ,extrapolation = nearest);       % RpD at cell temperature and SoC
-                Taup == tablelookup(tempLUT,socLUT, TauLUT_d, T,z ,extrapolation = nearest);    % TauD at cell temperature and SoC
-            end
+            % Discharge parameter interpolations
+            Ro == tablelookup(tempLUT,socLUT, RoLUT, T,z ,extrapolation = nearest);       % RoD at cell temperature and SoC
+            Rp == tablelookup(tempLUT,socLUT, RpLUT, T,z ,extrapolation = nearest);       % RpD at cell temperature and SoC
+            Taup == tablelookup(tempLUT,socLUT, TauLUT, T,z ,extrapolation = nearest);    % TauD at cell temperature and SoC
+
 
             % Electrical
             v == p.v - n.v;
