@@ -52,7 +52,7 @@ component TSPMe
         sn = {sn_max, '1'};         % Negative electrode stoichiometry
         
         % Transport: Solid and electrolyte concentrations, dimensionless
-        cn_hat = sp_max*ones(nR,1);        % Initial concentration, negative electrode: dimensionless
+        cn_hat = sn_max*ones(nR,1);        % Initial concentration, negative electrode: dimensionless
         cp_hat = sp_min*ones(nR,1);        % Initial concentration, positive electrode: dimensionless
         cen_hat = ones(nE,1);              % Initial electrolyte concentration, negative electrode: dimensionless
         ces_hati = ones(nS-2,1);           % Initial interior electrolyte concentration, separator. Left and right outer separator electrolyte points are identical to negative and postive electrolyte value at seperator boundary, therefore size is nS-2: dimensionless
@@ -66,7 +66,7 @@ component TSPMe
         etap_hat = zeros(nE,1);               % Poistive electrode overpotential: Dimensionless
               
         % Transport: Solid concentrations, dimensional
-        cn = cn_max*sp_max*ones(nR,1);        % Initial concentration, negative electrode
+        cn = cn_max*sn_max*ones(nR,1);        % Initial concentration, negative electrode
         cp = cp_max*sp_min*ones(nR,1);        % Initial concentration, positive electrode
         ce = ce0*ones(2*nE+nS-2,1);           % Initial electrolyte concentrationm full domain
         
@@ -286,7 +286,7 @@ component TSPMe
             
             % Terms for +ve electrode solid diff (Ref#1 eq B.14)
             dcdr_pTmp = D10r*cp_hat;                                                 % Spatial derivative approximation: +ve electrode conc.
-            dcdr_p = [0; dcdr_pTmp(2:nR-1); -CC_p/(alpha_p*gamma_p*DD_p)*i_hat/lp];  % Include interior and outer Neumann boundary values
+            dcdr_p = [0; dcdr_pTmp(2:nR-1); -CC_p/(alpha_p*gamma_p*DD_p)*J_p];       % Include interior and outer Neumann boundary values
             dc2dr2_p = D10r*dcdr_p;
             dcdt0_p = 3*DD_p*dc2dr2_p(1);                                            % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
             dcdtInt_p = DD_p*dc2dr2_p(2:nR)+2*DD_p*dcdr_p(2:nR)./r(2:nR)';           % Governing equations at rest of the solid domain - expanded form of spherical diffusion
@@ -296,7 +296,7 @@ component TSPMe
             
             % Terms for -ve electrode solid diff (Ref#1 eq B.14)
             dcdr_nTmp = D10r*cn_hat;                                                 % Spatial derivative approximation: -ve electrode conc.
-            dcdr_n = [0; dcdr_nTmp(2:nR-1); CC_n/(alpha_n*gamma_n*DD_n)*i_hat/ln];   % Include interior and outer Neumann boundary values
+            dcdr_n = [0; dcdr_nTmp(2:nR-1); -CC_n/(alpha_n*gamma_n*DD_n)*J_n];        % Include interior and outer Neumann boundary values
             dc2dr2_n = D10r*dcdr_n;
             dcdt0_n = 3*DD_n*dc2dr2_n(1);                                            % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
             dcdtInt_n = DD_n*dc2dr2_n(2:nR)+2*DD_n*dcdr_n(2:nR)./r(2:nR)';           % Governing equations at rest of the solid domain - expanded form of spherical diffusion
@@ -317,9 +317,9 @@ component TSPMe
             dcedt_p = gamma_e*D10p*(DD_ep*(eps_p^1.5).*dcedx_p) + (1-tr)*CC_e*J_p;
             
             % Electrolyte potential terms (Ref#1 eq B.17)
-            inG_n = i_hat/ln*xn'./ss_en/Sigma_e/eps_n^1.5;       % Integrand term in Ref#1 eq B.18
-            inG_s = i_hat./ss_es/Sigma_e/eps_s^1.5;              % Integrand term in Ref#1 eq B.18
-            inG_p = i_hat/lp*(1-xp)'./ss_ep/Sigma_e/eps_p^1.5;   % Integrand term in Ref#1 eq B.18
+            inG_n = J_n*xn'./ss_en/Sigma_e/eps_n^1.5;       % Integrand term in Ref#1 eq B.18
+            inG_s = -i_hat./ss_es/Sigma_e/eps_s^1.5;        % Integrand term in Ref#1 eq B.18
+            inG_p = J_p*(1-xp)'./ss_ep/Sigma_e/eps_p^1.5;   % Integrand term in Ref#1 eq B.18
             
             int_n = M10*[0;0.5*dxn'.*(inG_n(1:nE-1)+inG_n(2:nE))];          % Trapezoidal integration
             int_s = M6*[int_n(nE);0.5*dxs'.*(inG_s(1:nS-1)+inG_s(2:nS))];   % Trapezoidal integration
