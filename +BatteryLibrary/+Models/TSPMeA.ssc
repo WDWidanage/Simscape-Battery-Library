@@ -1,0 +1,513 @@
+component TSPMeA
+    % TSPMeA : 1.5
+    % A Thermal Single Particle Model with electrolyte and Ageing of a lithium-ion battery.
+    % Models the electrodes and electrolyte distrbuted voltage losses.
+    % Models anode side reactions for ageing
+    % Assumes an Arrehnius temperature dependance of the parameters.
+    %
+    % The equations and parameters used are from the following three papers - any other papers used will be directly cited in the comments
+    %   Ref#1 TSPMe Model: Planella2021, https://doi.org/10.1016/j.electacta.2021.138524.
+    %   Ref#2 Parameters: Chen2020 https://doi.org/10.1149/1945-7111/ab9050
+    %   Ref#3 Ageing model: Planella2022, https://arxiv.org/abs/2206.05078
+    %
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 28-03-2022 (Master of Puppets)
+    % All Rights Reserved
+
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+        Hi = foundation.thermal.thermal; % H
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = top;                  % +ve electrode terminal
+        n: Side = bottom;               % -ve electrode terminal
+        
+        % Parameter tabs
+        UILayout = [UIGroup("Initial conditions", z0, T0, eps_n0, Lf0, Cn)
+            UIGroup("Transport", DnRef, DpRef, sigma_nRef, sigma_eRef, sigma_pRef, tr,ce0)
+            UIGroup("Thermodynamics",cn_max,cp_max, sn_max,sn_min, sp_max,sp_min)
+            UIGroup("Kinetics", knRef,kpRef)
+            UIGroup("Thermal", Cp, Tref, Ea_kn, Ea_kp, Ea_Dn, Ea_De, Ea_Dp, Ea_sigman, Ea_sigmae, Ea_sigmap, Ea_ksei, Ea_Dsei, Ea_sigmasei, Ea_kLi)
+            UIGroup("Ageing", kseiRef, DseiRef, sigma_seiRef, Msei, pho_sei, Usei, csei0, kLiRef, ULi, MLi, pho_Li)
+            UIGroup("Domain geometry", Ln,Ls,Lp, Area_p, eps_s,eps_p, Rn, Rp, an,ap)];
+        Icon = 'icons\iconTSPMeA.png';
+
+    end
+    
+    outputs
+        % Cell SoC - Positve electrode surface soc
+        z = {1, '1'};                % SoC
+        
+        % Average film thickness 
+        Lf_bar = {5E-3,'um'};           % sohF
+
+        % SoH vector of four entries:
+        % - average -ve electrode porosity, 
+        % - normalised theoretical capacity,
+        % - SeI percentage contribution to capacity fade
+        % - Li plating contribution to capacity fade
+        SoH_Cn = {[0.3; 1; 0; 0],'1'};  % sohC     
+
+        % Concatanation of +ve current collector, full cell OCV and -ve electrode current collector potentials 
+        pots = {[4.3;4.1;0.2],'V'};  % Pots 
+    end
+    
+    variables (Access = Protected)
+        v = {3.75, 'V'};          % Terminal voltage
+        i = {0, 'A'};             % Current
+        T = {298, 'K'};           % Temperature
+        q = {0, 'W'};             % Heat flow rate
+                
+        % Thermodynamics
+        sp = {sp_min, '1'};         % Positive electrode stoichiometry
+        sn = {sn_max, '1'};         % Negative electrode stoichiometry
+        
+        % Transport: Solid and electrolyte concentrations, dimensionless
+        cn_hat = sn_max*ones(nR,1);        % Initial concentration, negative electrode: dimensionless
+        cp_hat = sp_min*ones(nR,1);        % Initial concentration, positive electrode: dimensionless
+        cen_hat = ones(nE,1);              % Initial electrolyte concentration, negative electrode: dimensionless
+        ces_hati = ones(nS-2,1);           % Initial interior electrolyte concentration, separator. Left and right outer separator electrolyte points are identical to negative and postive electrolyte value at seperator boundary, therefore size is nS-2: dimensionless
+        cep_hat = ones(nE,1);              % Initial electrolyte concentration, positive electrode: dimensionless
+        
+        % Potentials: dimensionless
+        Phie_hat = zeros(2*nE+nS-2,1);        % Electrolyte potential: Dimensionless
+              
+        % Butler Volmer intercolation loss eta, dimensionless. These varaibles are required since "asinh" is not supported in Simpscape but "sinh" is supported.
+        etaBV_n = zeros(nE,1);                % Negative electrode BV loss
+        etaBV_p = zeros(nE,1);                % Postive electrode BV loss
+        
+
+        % Transport: Solid concentrations, dimensional
+        cn = cn_max*sn_max*ones(nR,1);        % Initial concentration, negative electrode
+        cp = cp_max*sp_min*ones(nR,1);        % Initial concentration, positive electrode
+        ce = ce0*ones(2*nE+nS-2,1);           % Initial electrolyte concentrationm full domain
+        
+        % Potentials: dimensional
+        Phie = {zeros(2*nE+nS-2,1),'V'};      % Electrode potential
+       
+        % Ageing related variables: dimensionless
+        eps_n = ones(nE,1);                    % Negative electrode porosity ##
+        eps_nsei = zeros(nE,1);                % Negative electrode porosity due to SEI ##
+        eps_nLi = zeros(nE,1);                 % Negative electrode porosity due to Li plating ##
+        Jsei_hat = zeros(nE,1);                % SEI flux on negative electrode ##
+
+    end
+    
+    parameters
+        % Initial conditions
+        z0 = {1, '1'};                  % Initial SoC, z0
+        Cn = {4.9,'A*hr'};              % Cell capacity, Cn
+        
+        % Transport
+        DnRef = {3.3E-14, 'm^2/s'};     % Ref. -ve electrode diff. coeff., DnRef
+        DpRef = {4E-15, 'm^2/s'};       % Ref. +ve electrode diff. coeff., DpRef
+        cn_max = {33133, 'mol/m^3'}     % Maximum -ve particle conc., cn_max
+        cp_max = {63104, 'mol/m^3'}     % Maximum +ve particle conc., cp_max
+        ce0 = {1000,'mol/m^3'};         % Initial electrolyte conc., ce0
+        tr = {0.2594, '1'};             % Transference number, tr
+        sigma_nRef = {215, 'S/m'}       % Ref. -ve electrode conductivity, sigma_nRef
+        sigma_eRef = {1.2, 'S/m'};      % Ref. electrolyte conductivity, sigma_eRef
+        sigma_pRef = {0.18, 'S/m'}      % Ref. +ve electrode conductivity, sigma_pRef
+
+        
+        % OCVs
+        sn_max = {0.9014, '1'}; % Maximum -ve stoichiometry, sn_max
+        sn_min = {0.0279, '1'}; % Minimum -ve stoichiometry, sn_min
+        sp_max = {0.9072, '1'}; % Maximum +ve stoichiometry, sp_max
+        sp_min = {0.2567, '1'}; % Minimum +ve stoichiometry, sp_min
+        
+        % Kinetic parameters
+        knRef = {6.48E-7, '(A/m^2)/(mol/m^3)^1.5'};   % Ref. negative electrode reaction rate, knRef
+        kpRef = {3.42E-6, '(A/m^2)/(mol/m^3)^1.5'};   % Ref. positve electrode reaction rate, kpRef
+        
+        % Thermal parameters
+        Cp = {110, 'J/K'};              % Heat capacity, Cp
+        T0 = {298, 'K'};                % Initial temperature, T0
+        Tref = {298, 'K'};              % Arrhenius ref. temperature, Tref
+        
+        % Activation energies
+        Ea_kn = {1, 'kJ/mol'}           % Neg. reaction rate activation energy, Ea_kn
+        Ea_kp = {1, 'kJ/mol'}           % Pos. reaction rate activation energy, Ea_kp      
+        Ea_Dn = {75, 'kJ/mol'}          % Neg. diff. coeff. activation energy, Ea_Dn
+        Ea_Dp = {10, 'kJ/mol'}          % Pos. diff. coeff. activation energy, Ea_Dp        
+        Ea_De = {1.2, 'kJ/mol'}         % Elec. diff. coeff. activation energy, Ea_De
+        Ea_sigman = {80, 'kJ/mol'}      % Neg. cond. activation energy, Ea_sigman
+        Ea_sigmae = {80, 'kJ/mol'}      % Elec. cond. activation energy, Ea_sigmae
+        Ea_sigmap = {80, 'kJ/mol'}      % Pos. cond. activation energy, Ea_sigmap        
+        Ea_ksei = {1, 'kJ/mol'}        % SEI. reation rate. activation energy, Ea_ksei
+        Ea_Dsei = {1, 'kJ/mol'}        % SEI. diff. coeff. activation energy, Ea_Dsei
+        Ea_sigmasei = {1, 'kJ/mol'}    % SEI. cond. activation energy, Ea_sigmasei
+        Ea_kLi = {1, 'kJ/mol'}         % Li plating raetion rate activation energy, Ea_kLi
+
+
+        % Ageing parameters
+        kseiRef = {1E-12, 'm/s'}       % Ref. SEI reaction rate, kseiRef
+        csei0 = {4541, 'mol/m^3'}      % Initial SEI concentration, csei0
+        Usei = {0, 'V'}                % SEI reaction OCV, Usei
+        DseiRef = {2E-19, 'm^2/s'}     % Ref. SEI diff. coeff, DseiRef
+        Msei = {0.162, 'kg/mol'}       % SEI molar weight, Msei
+        pho_sei = {1690, 'kg/m^3'}     % SEI density, pho_sei
+        sigma_seiRef = {5E-6, 'S/m'}   % Ref. SEI conductivity, sigma_seiRef
+        Lf0 = {5E-3, 'um'}             % Initial film thickness, LF0
+        kLiRef = {1E-11,'m/s'}         % Ref. Li plating reaction rate, kLiRef
+        ULi = {0, 'V'}                 % Li plating reaction OCV, ULi
+        MLi = {6.94E-3, 'kg/mol'}      % Li molar weight, MLi
+        pho_Li = {534, 'kg/m^3'}       % Li density, pho_Li
+        
+        
+        % Domain geometry
+        Ln = {85.2, 'um'};       % Negative electrode thickness, Ln
+        Ls = {12, 'um'};         % Seperator thickness, Ls
+        Lp = {75.6, 'um'};       % Positive electrode thickness, Lp
+        eps_n0 = {0.25, '1'};    % Negative electrode initial porosity, eps_n0 
+        eps_s = {0.47, '1'};     % Separator porosity, eps_s
+        eps_p = {0.335, '1'};    % Positive electrode porosity, eps_p
+        Area_p = {1027, 'cm^2'}; % Positve electrode area, Area_p
+        
+        Rn = {5.86, 'um'}        % -ve Particle radius: Rn
+        Rp = {5.22, 'um'}        % +ve Particle radius: Rp
+        an = {3.84E5, '1/m'};    % -ve surface area density, an
+        ap = {3.82E5, '1/m'};    % +ve surface area density, ap
+                
+    end
+    
+    
+    parameters (Access = Protected)
+        F = {96485.3329, 's*A/mol'};   % Faraday constant
+        R = {8.3144, 'J/K/mol'};       % Universal gas constant
+       
+        DnTyp = {1E-14,'m^2/s'};               % Typical negative electrode diffusion coeff
+        DpTyp = {1E-15,'m^2/s'};               % Typical positive electrode diffusion coeff
+        DeTyp = {1E-10,'m^2/s'};               % Typical electrolyte diffusivity
+        Rdummy = {1,'Ohm'}                     % A dummy resistance to relate V to I
+        
+        % Define the collocation points and the derivative matrices for the electrolyte domain and particle domains
+        % Number of collocation points, Note: If changing these values, then
+        % also change the collocation points (s6, s10) and derivative matrices (D6, D10) accordingly
+        nE = 10;                       % Number of positive and negative electrolyte collocation points
+        nS = 6;                        % Number of seperator collocation points
+        nR = 10;                       % Number of radial collocation points
+        
+        % Total cell thickness and ratios
+        L = Lp+Ls+Ln;                  % Total cell thickness
+        lp = Lp/L;
+        ls = Ls/L;
+        ln = Ln/L;
+        
+        % Scaling factors
+        i0 = Cn/Area_p/{1,'hr'};        % Current scaling factor A/m^2
+        t0 = (F*cn_max*L)/i0;           % Time scaling factor s
+        Phi0 = {1,'V'};                 % Typical potential
+        
+        % Dimensionless parameters
+        CC_p = Rp^2/(DpTyp*t0);         % Ratio of solid diffusion to discharge time scales
+        CC_n = Rn^2/(DnTyp*t0);
+        CC_e = L^2/(DeTyp*t0);          % Ratio of electrolyte diffusion to discharge timescale
+        alpha_p = ap*Rp;                % Product of particle radius and surface area density
+        alpha_n = an*Rn;
+        gamma_p = cp_max/cn_max;        % Ratio of maximum lithium concentrations in electrode to maximum concentration in negative electrode
+        gamma_n = 1;
+        gamma_e = ce0/cn_max;
+        gamma_T = R*cn_max/Cp;          % Ratio of temperautre variation to reference temperature
+        lambda = Phi0*F/(R*Tref);       % Ratio of eletrode voltage to thermal voltage
+        
+        % Dimensionless ageing parameters
+        gamma_sei = pho_sei/(Msei*cn_max)     % (Ref#3 A.14) ##
+        gamma_Li = pho_Li/(MLi*cn_max)        % (Ref#3 A.14) ##
+        beta_sr = an*Lf0;                     % Thickness parameter (Ref#3 eq A.14) ##
+
+        % Transformed collocation points and derivative matrices
+        r = (1+s10)/2;                % Radial domain collocation points on interval [0,1]
+        D10r = 2*D10;                 % Corresponding derivative matrix for radial domain
+        xn = ln*(1+s10)/2;            % -ve electrode domain collocation points on interval [0,ln]
+        xs = ln + ls*(1+s6)/2;        % Separator domain collocation points on interval [ln,ln+ls]
+        xp = (ln+ls) + lp*(1+s10)/2;  % +ve electrode domain collocation points on interval [ln+ls,1]
+        D10n = 2*D10/ln;              % Corresponding derivative matrix for -ve electrode
+        D6s = 2*D6/ls;                % Corresponding derivative matrix for separator
+        D10p = 2*D10/lp;              % Corresponding derivative matrix for +ve electrode
+        
+        % Collocation points on standard interval [-1,1], Particle radius and electrodes: 10, separator: 6.
+        s6 = [-1	-0.809016994374948	-0.309016994374947	0.309016994374947	0.809016994374948	1]                                                     % Six collocation points on standard interval [-1,1]                                                                                                                                   % Three collocation points on standard interval [-1,1]
+        s10 = [-1	-0.939692620785908	-0.766044443118978	-0.5	-0.173648177666930	0.173648177666930	0.5	0.766044443118978	0.939692620785908	1] % Ten collocation points on standard interval [-1,1]
+        
+        % Derivative matrices on standard interval [-1,1]
+        D6 = [-8.50000000000000	10.4721359549996	-2.89442719099992	1.52786404500042	-1.10557280900008	0.5;
+            -2.61803398874990	1.17082039324994	2	-0.894427190999916	0.618033988749895	-0.276393202250021;
+            0.723606797749979	-2	0.170820393249937	1.61803398874990	-0.894427190999916	0.381966011250105;
+            -0.381966011250105	0.894427190999916	-1.61803398874990	-0.170820393249937	2	-0.723606797749979;
+            0.276393202250021	-0.618033988749895	0.894427190999916	-2	-1.17082039324994	2.61803398874989;
+            -0.5	1.10557280900008	-1.52786404500042	2.89442719099992	-10.4721359549996	8.5];  % Derivative matrix with six collocation points
+        
+        D10 = [-27.1666666666667	33.1634374775264	-8.54863217041303	4.00000000000000	-2.42027662546121	1.70408819104185	-1.33333333333333	1.13247433143179	-1.03109120412576	0.5;
+            -8.29085936938160	4.01654328417508	5.75877048314363	-2.27431608520652	1.30540728933228	-0.898197570222574	0.694592710667721	-0.586256827714545	0.532088886237956	-0.257772801031441;
+            2.13715804260326	-5.75877048314363	0.927019729872655	3.75877048314364	-1.68805925749197	1.06417777247591	-0.789861687269397	0.652703644666139	-0.586256827714545	0.283118582857949;
+            -1.00000000000000	2.27431608520652	-3.75877048314364	0.333333333333334	3.06417777247591	-1.48445439793712	1.00000000000000	-0.789861687269397	0.694592710667721	-0.333333333333333;
+            0.605069156365302	-1.30540728933228	1.68805925749197	-3.06417777247591	0.0895235543024199	2.87938524157182	-1.48445439793712	1.06417777247591	-0.898197570222574	0.426022047760462;
+            -0.426022047760462	0.898197570222574	-1.06417777247591	1.48445439793712	-2.87938524157182	-0.0895235543024198	3.06417777247591	-1.68805925749197	1.30540728933228	-0.605069156365302;
+            0.333333333333333	-0.694592710667721	0.789861687269397	-1.00000000000000	1.48445439793712	-3.06417777247591	-0.333333333333333	3.75877048314363	-2.27431608520651	1.00000000000000;
+            -0.283118582857949	0.586256827714545	-0.652703644666139	0.789861687269397	-1.06417777247591	1.68805925749197	-3.75877048314363	-0.927019729872654	5.75877048314363	-2.13715804260326;
+            0.257772801031441	-0.532088886237956	0.586256827714545	-0.694592710667721	0.898197570222574	-1.30540728933228	2.27431608520651	-5.75877048314363	-4.01654328417507	8.29085936938158;
+            -0.500000000000000	1.03109120412576	-1.13247433143179	1.33333333333333	-1.70408819104185	2.42027662546121	-4.00000000000000	8.54863217041303	-33.1634374775263	27.1666666666667]; % Derivative matrix with ten collocation points
+        
+        % Integration matrices and differences (for electrolyte potential) and average particle concentration
+        dr = diff(r);
+        dxn = diff(xn);
+        dxs = diff(xs);
+        dxp = diff(xp);
+        M6 = tril(ones(nS));    % Lower triangular matrix to perform cumulative integration
+        M10 = tril(ones(nE));   % Lower triangular matrix to perform cumulative integration
+        
+    end
+    
+    branches
+        i : p.i -> n.i;
+        q : Hi.Q -> *;
+    end
+    
+    intermediates % SoC and temeperature dependent functional paramters: OCVs, diff coeff., electrolyte conductivities, reaction rates.
+        % Positive and negative OCV curves
+        Up = -0.809*sp + 4.4875 - 0.0428*tanh(18.5138*(sp-0.5542)) - 17.7326*tanh(15.7809*(sp-0.3117))+17.5842*tanh(15.9308*(sp-0.3120));
+        Un = 1.9793*exp(-39.3631*sn)+0.2482-0.0909*tanh(29.8538*(sn-0.1234))- 0.04478*tanh(14.9159*(sn-0.2769)) - 0.0205*tanh(30.44*(sn-0.6103));
+        Usei_hat = value(Usei,'V');                          % Extract SEI OCV value without units  
+        ULi_hat = value(ULi,'V');                            % Extract Li OCV value without units
+        t0_value = value(t0,'s');                            % Extract t0 value without units
+
+        
+        % Non-dimensional temperature signal for use in Butler-Volmer (Ref#1 eq A.6l)
+        That = (T - Tref)*Cp/(R*Tref*cn_max);                   % Ref#1 eq A.4
+               
+        % Thermal dependance of parameters
+        kn = knRef*exp(Ea_kn/R*(1/Tref-1/T))                      % Arrhenius equation for negative electrode reaction rate: kn
+        kp = kpRef*exp(Ea_kp/R*(1/Tref-1/T))                      % Arrhenius equation for postive electrode reaction rate: kp
+        Dn = DnRef*exp(Ea_Dn/R*(1/Tref-1/T))                      % Arrhenius equation for negative electrode diffusion coeffcient: Dn
+        Dp = DpRef*exp(Ea_Dp/R*(1/Tref-1/T))                      % Arrhenius equation for positive electrode diffusion coefficent: Dp
+        sigma_n = sigma_nRef*exp(Ea_sigman/R*(1/Tref-1/T))        % Arrhenius equation for negative electrode conductivity: sigma_n
+        sigma_e = sigma_eRef*exp(Ea_sigmae/R*(1/Tref-1/T))        % Arrhenius equation for electrolyte conductivity: sigma_e
+        sigma_p = sigma_pRef*exp(Ea_sigmap/R*(1/Tref-1/T))        % Arrhenius equation for positive electrode conductivity: sigma_p
+        Den = DenRef*exp(Ea_De/R*(1/Tref-1/T))                    % Arrhenius equation for negative electrolyte diffusion coefficients
+        Des = DesRef*exp(Ea_De/R*(1/Tref-1/T))                    % Arrhenius equation for separator electrolyte diffusion coefficients
+        Dep = DepRef*exp(Ea_De/R*(1/Tref-1/T))                    % Arrhenius equation for positive electrolyte diffusion coefficients
+        ksei = kseiRef*exp(Ea_ksei/R*(1/Tref-1/T))                % Arrhenius equation for negative electrode sei reaction rate: ksei ##
+        Dsei = DseiRef*exp(Ea_Dsei/R*(1/Tref-1/T))                % Arrhenius equation for negative electrode sei diffusion coeffcient: Dsei ##
+        sigma_sei = sigma_seiRef*exp(Ea_sigmasei/R*(1/Tref-1/T))  % Arrhenius equation for sei conductivity: sigma_sei ##
+        kLi = kLiRef*exp(Ea_kLi/R*(1/Tref-1/T))                   % Arrhenius equation for negative electrode Li plating reaction rate: kLi ##
+
+
+        % Electrolyte diffusivity
+        ce0_hat = value(ce0,'mol/m^3');                                                                  % Extract intial concentration value without units                        
+        ces_hat = [cen_hat(nE); ces_hati; cep_hat(1)];                                                   % Enforce separator boundary electrolyte identity
+        DenRef = {8.794E-17 *((cen_hat*ce0_hat).^2) - 3.972E-13 *(cen_hat*ce0_hat) + 4.862E-10,'m^2/s'}; % Ref. negative electrolyte diffusion coefficients, size nE x 1: Dimensional (Ref#2 eq 23)
+        DesRef = {8.794E-17 *((ces_hat*ce0_hat).^2) - 3.972E-13 *(ces_hat*ce0_hat) + 4.862E-10,'m^2/s'}; % Ref. separator electrolyte diffusion coefficients, size nS x 1: Dimensional (Ref#2 eq 23)
+        DepRef = {8.794E-17 *((cep_hat*ce0_hat).^2) - 3.972E-13 *(cep_hat*ce0_hat) + 4.862E-10,'m^2/s'}; % Ref. positive electrolyte diffusion coefficients, size nE x 1: Dimensional (Ref#2 eq 23)
+        sigma_en = sigma_e*ones(size(cen_hat));    % Negative electrolyte conductivity coefficients
+        sigma_es = sigma_e*ones(size(ces_hat));    % Separator electrolyte conductivity coefficients
+        sigma_ep = sigma_e*ones(size(cep_hat));    % Positive electrolyte conductivity coefficients
+        
+        % Scaled and non dimensionalised parameters
+        DD_p = Dp/DpTyp;                    % Dimensionless positive electrode diffusion coefficient (Ref#1 eq A.4)
+        DD_n = Dn/DnTyp;                    % Dimensionless negative electrode diffusion coefficient (Ref#1 eq A.4)
+        DD_en = Den/DeTyp;                  % Dimensionless negative electrolyte diffusion coefficients (Ref#1 eq A.4)
+        DD_es = Des/DeTyp;                  % Dimensionless separator electrolyte diffusion coefficients (Ref#1 eq A.4)
+        DD_ep = Dep/DeTyp;                  % Dimensionless positve electrolyte diffusion coefficients (Ref#1 eq A.4)
+        
+        ss_en =  sigma_en/sigma_eRef;      % Dimensionless negative electrolyte conductivity coefficients (Ref#1 eq A.4)
+        ss_es =  sigma_es/sigma_eRef;      % Dimensionless separator electrolyte conductivity coefficients (Ref#1 eq A.4) 
+        ss_ep =  sigma_ep/sigma_eRef;      % Dimensionless positive electrolyte conductivity coefficients (Ref#1 eq A.4)
+               
+        % Non-dimensional parameters 
+        CC_rn = F/(kn*an*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        CC_rp = F/(kp*ap*sqrt(ce0)*t0);     % Radius of active material particle (Ref#1 eq A.9)
+        Sigma_n = R*Tref*sigma_n/(F*L*i0)   % Ratio of thermal voltage to typical ohmic drop in the negative electrode (Ref#1 eq A.9)
+        Sigma_e = R*Tref*sigma_e/(F*L*i0);  % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)       
+        Sigma_p = R*Tref*sigma_p/(F*L*i0)   % Ratio of thermal voltage to typical ohmic drop in the positive electrode (Ref#1 eq A.9)
+
+        % Non-dimensional ageing parameters
+        CC_rsei = cn_max/(ksei*an*t0*csei0);                % SEI exchange current parameter (Ref#3 eq B.4) ##
+        CC_sei = Lf0*cn_max/(Dsei*an*t0*csei0);             % SEI concentration parameter (Ref#3 eq eq B.4) ##
+        Sigma_film_n = R*Tref*sigma_sei*an*L/(F*Lf0*i0);    % Ratio of thermal voltage to typical ohmic drop in the negative electrode film (Ref#3 eq A.14) ##       
+        CC_rLi = cn_max/(kLi*an*t0*ce0);                    % Li plating exchange current parameter (Ref#3 eq eq B.4) ##
+
+    end
+    
+    equations (Initial=true)
+        % Thermodynamics
+        sn == (sn_max - sn_min)*z0 + sn_min;  % Negative electride stiochiometry
+        sp == sp_max - (sp_max - sp_min)*z0;  % Positive electrode stoichiometry
+        
+        % Initial conditions: Solid concentrations, dimensionless
+        cn_hat == sn*ones(nR,1);    % -ve electrode particle
+        cp_hat == sp*ones(nR,1);    % +ve electrode particle
+        
+        % Initial cell temperature
+        T == T0;
+
+        % Negative electrode porosity
+        eps_n == eps_n0*ones(nE,1);  % ##
+
+        
+    end
+    
+    equations
+        let
+            i_hat = (-i/Area_p)/i0;     % Dimensionless curent density i_hat is positive for discharge           
+            U = {Up-Un,'V'};            % Cell OCV 
+            qf = (v-U)*i;               % Heat source
+            J_n = i_hat/ln;             % Ref#1 eq B.13 positive for discharge
+            J_p = -i_hat/lp;            % Ref#1 eq B.13 negative for charge
+            
+            % Terms for +ve electrode solid diff (Ref#1 eq B.14)
+            dcdr_pTmp = D10r*cp_hat;                                                  % Spatial derivative approximation: +ve electrode conc.
+            dcdr_p = [0; dcdr_pTmp(2:nR-1); -CC_p/(alpha_p*gamma_p*DD_p)*J_p];        % Include interior and outer Neumann boundary values
+            dc2dr2_p = D10r*dcdr_p;
+            dcdt0_p = 3*DD_p*dc2dr2_p(1);                                             % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
+            dcdtInt_p = DD_p*dc2dr2_p(2:nR)+2*DD_p*dcdr_p(2:nR)./r(2:nR)';            % Governing equations at rest of the solid domain - expanded form of spherical diffusion
+            dcdt_p = [dcdt0_p; dcdtInt_p];                                            % Complete set of goverening equations
+            
+            
+            % Terms for -ve electrode solid diff (Ref#1 eq B.14)
+            dcdr_nTmp = D10r*cn_hat;                                                  % Spatial derivative approximation: -ve electrode conc.
+            Jn_int_hat = J_n - Jsr_hat_bar;                                           % Intercollation current into negative electrode with ageing side-reaction (Ref#3 eq 65C) ##
+            dcdr_n = [0; dcdr_nTmp(2:nR-1); -CC_n/(alpha_n*gamma_n*DD_n)*Jn_int_hat]; % Include interior and outer Neumann boundary values  (Ref#3 eq 65b and 65C) ##
+            dc2dr2_n = D10r*dcdr_n;
+            dcdt0_n = 3*DD_n*dc2dr2_n(1);                                             % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
+            dcdtInt_n = DD_n*dc2dr2_n(2:nR)+2*DD_n*dcdr_n(2:nR)./r(2:nR)';            % Governing equations at rest of the solid domain - expanded form of spherical diffusion
+            dcdt_n = [dcdt0_n; dcdtInt_n];                                            % Complete set of goverening equations
+            
+            % Terms for electrolyte diffusion (Ref#1 eq B.15)
+            dcedx_nTmp = D10n*cen_hat;
+            dcedx_sTmp = D6s*ces_hat;
+            dcedx_pTmp = D10p*cep_hat;
+            dcedx_n =  [0; dcedx_nTmp(2:nE-1); (DD_es(1)*eps_s^1.5)/(DD_en(nE)*eps_n(nE)^1.5)*dcedx_sTmp(1)];                                                          % Include interior and outer Neumann boundary values (continuity equation) ##
+            dcedx_s =  [(DD_en(nE)*eps_n(nE)^1.5)/(DD_es(1)*eps_s^1.5)*dcedx_nTmp(nE); dcedx_sTmp(2:nS-1); (DD_ep(1)*eps_p^1.5)/(DD_es(nS)*eps_s^1.5)*dcedx_pTmp(1)];  % Include interior and outer Neumann boundary values (continuity equation) ##
+            dcedx_p =  [(DD_es(nS)*eps_s^1.5)/(DD_ep(1)*eps_p^1.5)*dcedx_sTmp(nS); dcedx_pTmp(2:nE-1); 0];                                                             % Include interior and outer Neumann boundary values (continuity equation)
+            
+            dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n;   % RHS Ref#1 eq B.15a  (Assume porsity is constant over the short time scale), then epsilon can be taken out of the derivation and in Ref#1 eq. B.15a
+            %dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n  - t0_value*CC_e*gamma_e*cen_hat.*deps_n;
+            dcedt_s = gamma_e*D6s*(DD_es*(eps_s^1.5).*dcedx_s);                        % RHS Ref#1 eq B.15a       
+            dcedt_p = gamma_e*D10p*(DD_ep*(eps_p^1.5).*dcedx_p) + (1-tr)*CC_e*J_p;     % RHS Ref#1 eq B.15a
+            
+            % Electrolyte potential terms (Ref#1 eq B.18)
+            inG_n = J_n*xn'./(Sigma_e*ss_en.*(eps_n.^1.5));        % Integrand term in Ref#1 eq B.18 ##
+            inG_s = i_hat./(Sigma_e*ss_es*eps_s^1.5);              % Integrand term in Ref#1 eq B.18
+            inG_p = J_p*(1-xp)'./(Sigma_e*ss_ep*eps_p^1.5);        % Integrand term in Ref#1 eq B.18
+            
+            int_n = M10*[0;0.5*dxn'.*(inG_n(1:nE-1)+inG_n(2:nE))];          % Cumulative trapezoidal integration
+            int_s = M6*[int_n(nE);0.5*dxs'.*(inG_s(1:nS-1)+inG_s(2:nS))];   % Cumulative trapezoidal integration
+            int_p = M10*[int_s(nS);0.5*dxp'.*(inG_p(1:nE-1)+inG_p(2:nE))];  % Cumulative trapezoidal integration
+            
+            Phien_hat = -int_n + 2*(1-tr)*log(cen_hat/cen_hat(1));
+            Phies_hat = -int_s + 2*(1-tr)*log(ces_hat/cen_hat(1));
+            Phiep_hat = -int_p + 2*(1-tr)*log(cep_hat/cen_hat(1));
+            
+            % Terms for electrode potentials (Ref#1 eq A.6n)
+            i0n = gamma_n/CC_rn*sqrt(cen_hat*sn*(1-sn));   % Negative electrode exchange current denisity (Ref#1 eq A.6n)
+            i0p = gamma_p/CC_rp*sqrt(cep_hat*sp*(1-sp));   % Positive electrode exchange current denisity (Ref#1 eq A.6n)               
+            
+            % Phin_hat calculation terms (Ref#1 eq B.27a and Ref#3 eq C.11)
+            iappTerm_n = -i_hat*(2*ln - xn').*xn'/(2*ln*Sigma_n) + i_hat*ln/(3*Sigma_n);                % First two terms of Ref#1 eq B.27a     
+            intPhin_1 = -1/ln*0.5*dxn*(int_n(1:nE-1) + int_n(2:nE));                                    % Third term of Ref#1 eq B.27a
+            intG_logCn = log(cen_hat/cen_hat(1));                                                       % Integrand in fourth term of Ref#1 eq B.27a
+            intPhin_2 = 2*(1-tr)*(1+gamma_T*That)*0.5*dxn*(intG_logCn(1:nE-1) + intG_logCn(2:nE))/ln;   % Fourth term of Ref#1 eq B.27a
+            intG_BVn = etaBV_n; % i_hat./(ln*i0n);                                                      % Integrand in fifth term of Ref#1 eq B.27a
+            intPhin_3 = 2/ln*(1+gamma_T*That)*0.5*dxn*(intG_BVn(1:nE-1) + intG_BVn(2:nE));              % Fifth term of Ref#1 eq B.27a
+            iappFilm = i_hat*Lfn_hat_bar/(ln*Sigma_film_n);                                             % Fourth term of Ref#3 eq C.11
+            Phin_hat = Un + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + iappFilm)/lambda          % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.11)
+
+            % Phip_hat calculation terms (Ref#1 eq B.27b)
+            iappTerm_p = i_hat*(2*(1-lp) - xp').*xp'/(2*lp*Sigma_p) - i_hat*(2*lp^2 - 6*lp + 3)/(6*lp*Sigma_p); % First two terms of Ref#1 eq B.27b     
+            intPhip_1 = -1/lp*0.5*dxp*(int_p(1:nE-1) + int_p(2:nE));                                            % Third term of Ref#1 eq B.27b
+            intG_logCp = log(cep_hat/cen_hat(1));                                                               % Integrand in fourth term of Ref#1 eq B.27b
+            intPhip_2 = 2*(1-tr)*(1+gamma_T*That)*0.5*dxp*(intG_logCp(1:nE-1) + intG_logCp(2:nE))/lp;           % Fourth term of Ref#1 eq B.27a
+            intG_BVp = etaBV_p; % i_hat./(lp*i0p);                                                              % Integrand in fifth term of Ref#1 eq B.27b
+            intPhip_3 = -2/lp*(1+gamma_T*That)*0.5*dxp*(intG_BVp(1:nE-1) + intG_BVp(2:nE));                     % Fifth term of Ref#1 eq B.27b
+            Phip_hat = Up + (iappTerm_p + intPhip_1 + intPhip_2 + intPhip_3)/lambda                             % Positive electrode potential (Ref#1 eq B.28b)
+
+            % Film resistance potential
+            Phi_fn = J_n*Lfn_hat/Sigma_film_n;                      % Potential drop across negative electrode film (Ref#3 eq A.10c, A.10e)
+
+            etan_hat = lambda*(Phin_hat - Un) - Phien_hat - Phi_fn;
+            etap_hat = lambda*(Phip_hat - Up) - Phiep_hat;
+
+           
+            % Terms for ageing dynamics
+            epsn_init = eps_n0*ones(nE,1);  
+            etasei_hat = lambda*(Phin_hat - Usei_hat) - Phien_hat - Phi_fn;               % SEI over-potential (Ref#3 eq C.3b) ##
+            etaLi_hat = lambda*(Phin_hat - ULi_hat) - Phien_hat - Phi_fn;                 % Li plating over-potential (Ref#3 eq C.3b) ##
+            %Jsei_hat = -i0sei_hat.*exp(-0.1*etasei_hat/(1+gamma_T*That));                 % SEI flux (Ref#3 eq C.3b with assuming alpha_sei = 0.1) ##
+            exp_term = exp(-0.1*etasei_hat/(1+gamma_T*That));                             % SEI flux (Ref#3 eq C.3b with assuming alpha_sei = 0.1 and with reaction rate j_sei substituted with Ref#3 B.1 and B.2. Note: there is an error in eq B.2, it should read c_sei_hat = 1 - CC_sei*Lfn_hat*Jsei_hat)
+            %Jsei_hat = -exp_term./(CC_rsei - CC_sei*Lfn_hat.*exp_term);
+            Jsei_hat_bar = (0.5*dxn*(Jsei_hat(1:nE-1) + Jsei_hat(2:nE)))/ln;              % Average (over negative electrolyte domain) SEI reaction (Ref#3 eq 66a), trapezoidal integration ##
+            JLi_hat = -i0Li_hat.*exp(-0.1*etaLi_hat/(1+gamma_T*That));                    % Li-plaitng side reaction current (Ref#3 eq A.10d with thermal coupling from Ref#1)
+            JLi_hat_bar = (0.5*dxn*(JLi_hat(1:nE-1) + JLi_hat(2:nE)))/ln;                 % Average (over negative electrolyte domain) Li plating reaction (Ref#3 eq 66a), trapezoidal integration ##
+            %i0sei_hat = 1./(CC_rsei + CC_sei*Lfn_hat)                                     % SEI exchange current density, i0sei_hat (Ref#3 eq B.1 and eq B.2)
+            i0Li_hat = cen_hat/CC_rLi;                                                    % Li plating exchange current density (Ref#3 eq B.3)
+            Jsr_hat_bar = Jsei_hat_bar + JLi_hat_bar;                                     % Average side-reation current
+            deps_nsei = Jsei_hat./(2*gamma_sei);                                          % Rate of of change of porosity due to sei 
+            deps_nLi = JLi_hat/(gamma_Li);                                                % Rate of change of porosity due to Li plating
+            deps_n =  deps_nsei + deps_nLi;                                               % Overall rate of change of porosity                                               
+            eps_barsei = -L*0.5*dxn*(eps_nsei(1:nE-1) + eps_nsei(2:nE));                  % Porosity change (aussming zero initial sei porosity, is neagitve) multiply by -1 to make positive
+            eps_barLi = -L*0.5*dxn*(eps_nLi(1:nE-1) + eps_nLi(2:nE));                     % Porosity change (aussming zero initial Li plating porosity, is neagtive) multiply by -1 to make positive
+            % eps_bar = L*0.5*dxn*((epsn_init(1:nE-1) + epsn_init(2:nE)) - (eps_n(1:nE-1) + eps_n(2:nE)));  % Porosity change over negative electrode. Dimensional trapezoidal integration of Ref#3 eq 21 
+            eps_bar = L*0.5*dxn*((eps_n(1:nE-1) + eps_n(2:nE)))/Ln;                       % Average porosity over negative electrode. Dimensional trapezoidal integration
+            Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq A.12)
+            Lfn_hat_bar = 0.5*dxn*(Lfn_hat(1:nE-1) + Lfn_hat(2:nE))/ln                    % Average film thickness (trapezoidal integration over spatial coordinates)
+            SoH_sei = (F*Area_p*2*eps_barsei*pho_sei/Msei)/Cn;                            % Capacity SoH [%] from SEI  (Ref#3 eq 21d and normalising by Cn)
+            SoH_Li = (F*Area_p*eps_barLi*pho_Li/MLi)/Cn;                                  % Capacity SoH [%] from Li-plating (Ref#3 eq 21d and normalising by Cn)
+            SoH_tot = 1 - (SoH_sei + SoH_Li)                                              % Total SoH [%] (Ref#3 eq 21d and normalising by Cn)
+        in
+            v == p.v - n.v
+            
+            % Thermodynamics
+            sp == cp_hat(nR); % +ve stoic.
+            sn == cn_hat(nR); % -ve stoic.
+            z == (sp_max - cp_hat(nR))/(sp_max - sp_min);  % Cell soc,  positve electrode surface soc
+            
+            % Solid diffusion: Dimensionless in all variables except time (by multiplying by t0)
+            t0*CC_p*der(cp_hat) == dcdt_p           % Solve for cp_hat (Ref#1 eq B.14a)
+            t0*CC_n*der(cn_hat) == dcdt_n           % Solve for cn_hat (Ref#1 eq B.14a)
+    
+            % Electrolyte diffusion: Dimensionless in all variables except time (by multiplying by t0)
+            t0*CC_e*gamma_e*eps_n.*der(cen_hat) == dcedt_n;          % Solve for cen_hat (Ref#1 eq B.15a on negative domain)
+            t0*CC_e*gamma_e*eps_s*der(ces_hati) == dcedt_s(2:nS-1);  % Solve for ces_hat (Ref#1 eq B.15a on seperator domain)
+            t0*CC_e*gamma_e*eps_p*der(cep_hat) == dcedt_p;           % Solve for cep_hat (Ref#1 eq B.15a on positive domain)
+                        
+            % Electrode potentials
+            sinh(etaBV_n) == i_hat./(ln*i0n);                                 % Solve for etaBV_n, integrand in fifth term of Ref#1 eq B.27a
+            sinh(etaBV_p) == i_hat./(lp*i0p);                                 % Solve for etaBV_p, integrand in fifth term of Ref#1 eq B.27b
+            
+            % Electrolyte potential over full domain: Dimensionless
+            Phie_hat == [Phien_hat;Phies_hat(2:nS-1);Phiep_hat]; 
+            
+            % SEI + Li-plating: Dimensionless
+            Jsei_hat == (-CC_sei*Lfn_hat.*Jsei_hat/CC_rsei - 1/CC_rsei).*exp_term;
+            t0*der(eps_n) == deps_n;                                          % Negative electrode porosity dynamics (Ref#3 eq 72 or eq A.11, assume non zero initial values eps_n0, for eps_n)
+            t0*der(eps_nsei) == deps_nsei;                                    % Negative electrode porosity dynamics due to SEI (Ref#3 eq 72 or eq A.11 but assuming zero inital values for eps_nsei, interested in relative change due to sei plaitng and not absolute)
+            t0*der(eps_nLi) == deps_nLi;                                      % Negative electrode porosity dynamics due to Li plating (Ref#3 eq 72 or eq A.11, but assuming zero inital values for eps_nLi, interested in relative change due to Li plaitng and not absolute)
+
+            % Dimensional variables: Concentrations
+            cp == cp_hat*cp_max;                    % Solid concentration, +ve (Ref#1 eq A.4)
+            cn == cn_hat*cn_max;                    % Solid concentration, -ve (Ref#1 eq A.4)
+            ce == [cen_hat; ces_hati; cep_hat]*ce0; % Electrolyte concentration full domain (Ref#1 eq A.4)
+
+            % Dimensional variables: Potentials
+            Phie == Phie_hat*R*Tref/F                                               % Electrolyte potential, over full domain (Ref#1 eq A.4)
+
+            % Dimensional variables SoH: Film thickness and cell capacity
+            Lf_bar == Lf0*Lfn_hat_bar;                                              % Average negative electrode film thickness (Ref#3 eq ??)
+            
+            % Collect total SoH, and SoH due to SEI and Li plating
+            SoH_Cn == [eps_bar; SoH_tot; SoH_sei; SoH_Li];                          % Average porosity, capacity SoH [%] total and the contributions from SEI and Li-plating (Ref#3 eq 21d and normalising by Cn)
+            
+            v == Phi0*(Phip_hat(end) - Phin_hat(1));            % Terminal voltage [V]            
+            pots == [Phi0*Phip_hat(end);U;Phi0*Phin_hat(1)];    % Potentials as an output signal. Concatanation of +ve, OCV and -ve electrode potentials 
+            
+            % Thermal
+            T == Hi.T;
+            Cp*der(T) == q + qf;            % Heat equation            
+        end
+    end
+    
+    
+end
