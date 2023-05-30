@@ -24,7 +24,7 @@ component TSPMe
         
         % Parameter tabs
         UILayout = [UIGroup("Initial conditions", z0, T0)
-            UIGroup("Transport", DnRef,DpRef, sigma_eRef, tr)
+            UIGroup("Transport", DnRef,DpRef, sigma_eRef, tr, ce0)
             UIGroup("Thermodynamics",cn_max,cp_max, sn_max,sn_min, sp_max,sp_min)
             UIGroup("Kinetics", knRef,kpRef)
             UIGroup("Thermal", Cp, Tref, Ea_kn,Ea_kp, Ea_Dn,Ea_Dp, Ea_De,Ea_sigmae)
@@ -87,6 +87,7 @@ component TSPMe
         DpRef = {4E-15, 'm^2/s'};       % Ref. solid Therdiff. coeff. +ve, DpRef
         cn_max = {33133, 'mol/m^3'}     % Maximum -ve particle conc. cn_max
         cp_max = {63104, 'mol/m^3'}     % Maximum +ve particle conc. cp_max
+        ce0 = {1000,'mol/m^3'};         % Initial electrolyte conc. ce0
         tr = {0.2594, '1'};             % Transference number, tr
         sigma_eRef = {1.2, 'S/m'};      % Ref. electrolyte conductivity, sigma_eRef
         
@@ -137,7 +138,6 @@ component TSPMe
         DnTyp = {1E-14,'m^2/s'};               % Typical negative electrode diffusion coeff
         DpTyp = {1E-15,'m^2/s'};               % Typical positive electrode diffusion coeff
         DeTyp = {1E-10,'m^2/s'};               % Typical electrolyte diffusivity
-        ce0 = {1000,'mol/m^3'};                % Initial electrolyte concentration
         Rdummy = {1,'Ohm'}                     % A dummy resistance to relate V to I
         
         % Define the collocation points and the derivative matrices for the electrolyte domain and particle domains

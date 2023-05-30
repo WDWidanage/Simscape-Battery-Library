@@ -1,14 +1,15 @@
 component TSPMeA
     % TSPMeA : 1.5
-    % A Thermal Single Particle Model with electrolyte and Ageing of a lithium-ion battery.
+    % A Thermal Single Particle Model with electrolyte and Ageing of a 
+    % lithium-ion battery.
     % Models the electrodes and electrolyte distrbuted voltage losses.
     % Models anode side reactions for ageing
     % Assumes an Arrehnius temperature dependance of the parameters.
     %
     % The equations and parameters used are from the following three papers - any other papers used will be directly cited in the comments
-    %   Ref#1 TSPMe Model: Planella2021, https://doi.org/10.1016/j.electacta.2021.138524.
-    %   Ref#2 Parameters: Chen2020 https://doi.org/10.1149/1945-7111/ab9050
-    %   Ref#3 Ageing model: Planella2022, https://arxiv.org/abs/2206.05078
+    %   Ref#1 TSPMe Model (for thermal scaling factors) : Planella2021, https://doi.org/10.1016/j.electacta.2021.138524.
+    %   Ref#2 Parameters (OCV functions)                : Chen2020 https://doi.org/10.1149/1945-7111/ab9050
+    %   Ref#3 Ageing model (without temperature)        : Planella2023, https://doi.org/10.1016/j.apm.2022.12.009
     %
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 28-03-2022 (Master of Puppets)
     % All Rights Reserved
@@ -368,25 +369,26 @@ component TSPMeA
             
             % Terms for -ve electrode solid diff (Ref#1 eq B.14)
             dcdr_nTmp = D10r*cn_hat;                                                  % Spatial derivative approximation: -ve electrode conc.
-            Jn_int_hat = J_n - Jsr_hat_bar;                                           % Intercollation current into negative electrode with ageing side-reaction (Ref#3 eq 65C) ##
-            dcdr_n = [0; dcdr_nTmp(2:nR-1); -CC_n/(alpha_n*gamma_n*DD_n)*Jn_int_hat]; % Include interior and outer Neumann boundary values  (Ref#3 eq 65b and 65C) ##
+            Jn_int_hat = J_n - Jsr_hat_bar;                                           % Intercollation current into negative electrode with ageing side-reaction (Ref#3 eq C.2c) ##
+            dcdr_n = [0; dcdr_nTmp(2:nR-1); -CC_n/(alpha_n*gamma_n*DD_n)*Jn_int_hat]; % Include interior and outer Neumann boundary values  (Ref#3 eq C.2b and C.2c) ##
             dc2dr2_n = D10r*dcdr_n;
             dcdt0_n = 3*DD_n*dc2dr2_n(1);                                             % Handle governing equation singularity at r=0 (See eq 38 in http://dx.doi.org/10.1016/j.compchemeng.2014.05.022)
             dcdtInt_n = DD_n*dc2dr2_n(2:nR)+2*DD_n*dcdr_n(2:nR)./r(2:nR)';            % Governing equations at rest of the solid domain - expanded form of spherical diffusion
             dcdt_n = [dcdt0_n; dcdtInt_n];                                            % Complete set of goverening equations
             
-            % Terms for electrolyte diffusion (Ref#1 eq B.15)
+            % Terms for electrolyte diffusion (Ref#1 eq B.15), in the code we assume the negative electrode 
+            % porosity (eps_n) to change slowly with time that it can be "pulled out" of the time derivative in (Ref#3 eq C.5a)
             dcedx_nTmp = D10n*cen_hat;
             dcedx_sTmp = D6s*ces_hat;
             dcedx_pTmp = D10p*cep_hat;
-            dcedx_n =  [0; dcedx_nTmp(2:nE-1); (DD_es(1)*eps_s^1.5)/(DD_en(nE)*eps_n(nE)^1.5)*dcedx_sTmp(1)];                                                          % Include interior and outer Neumann boundary values (continuity equation) ##
-            dcedx_s =  [(DD_en(nE)*eps_n(nE)^1.5)/(DD_es(1)*eps_s^1.5)*dcedx_nTmp(nE); dcedx_sTmp(2:nS-1); (DD_ep(1)*eps_p^1.5)/(DD_es(nS)*eps_s^1.5)*dcedx_pTmp(1)];  % Include interior and outer Neumann boundary values (continuity equation) ##
-            dcedx_p =  [(DD_es(nS)*eps_s^1.5)/(DD_ep(1)*eps_p^1.5)*dcedx_sTmp(nS); dcedx_pTmp(2:nE-1); 0];                                                             % Include interior and outer Neumann boundary values (continuity equation)
+            dcedx_n =  [0; dcedx_nTmp(2:nE-1); (DD_es(1)*eps_s^1.5)/(DD_en(nE)*eps_n(nE)^1.5)*dcedx_sTmp(1)];                                                         % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface) ##
+            dcedx_s =  [(DD_en(nE)*eps_n(nE)^1.5)/(DD_es(1)*eps_s^1.5)*dcedx_nTmp(nE); dcedx_sTmp(2:nS-1); (DD_ep(1)*eps_p^1.5)/(DD_es(nS)*eps_s^1.5)*dcedx_pTmp(1)];  % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface) ##
+            dcedx_p =  [(DD_es(nS)*eps_s^1.5)/(DD_ep(1)*eps_p^1.5)*dcedx_sTmp(nS); dcedx_pTmp(2:nE-1); 0];                                                             % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface)
             
-            dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n;   % RHS Ref#1 eq B.15a  (Assume porsity is constant over the short time scale), then epsilon can be taken out of the derivation and in Ref#1 eq. B.15a
+            dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n;   % RHS Ref#3 eq. C.5a  (Assume porsity is constant over the short time scale), then epsilon can be taken out of the derivation and in Ref#3 eq. C.5a
             %dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n  - t0_value*CC_e*gamma_e*cen_hat.*deps_n;
-            dcedt_s = gamma_e*D6s*(DD_es*(eps_s^1.5).*dcedx_s);                        % RHS Ref#1 eq B.15a       
-            dcedt_p = gamma_e*D10p*(DD_ep*(eps_p^1.5).*dcedx_p) + (1-tr)*CC_e*J_p;     % RHS Ref#1 eq B.15a
+            dcedt_s = gamma_e*D6s*(DD_es*(eps_s^1.5).*dcedx_s);                        % RHS Ref#3 eq. C.5a       
+            dcedt_p = gamma_e*D10p*(DD_ep*(eps_p^1.5).*dcedx_p) + (1-tr)*CC_e*J_p;     % RHS Ref#3 eq. C.5a
             
             % Electrolyte potential terms (Ref#1 eq B.18)
             inG_n = J_n*xn'./(Sigma_e*ss_en.*(eps_n.^1.5));        % Integrand term in Ref#1 eq B.18 ##
@@ -397,65 +399,56 @@ component TSPMeA
             int_s = M6*[int_n(nE);0.5*dxs'.*(inG_s(1:nS-1)+inG_s(2:nS))];   % Cumulative trapezoidal integration
             int_p = M10*[int_s(nS);0.5*dxp'.*(inG_p(1:nE-1)+inG_p(2:nE))];  % Cumulative trapezoidal integration
             
-            Phien_hat = -int_n + 2*(1-tr)*log(cen_hat/cen_hat(1));
-            Phies_hat = -int_s + 2*(1-tr)*log(ces_hat/cen_hat(1));
-            Phiep_hat = -int_p + 2*(1-tr)*log(cep_hat/cen_hat(1));
+            Phien_hat = -int_n + 2*(1-tr)*log(cen_hat/cen_hat(1));          % Ref#1 eq B.18
+            Phies_hat = -int_s + 2*(1-tr)*log(ces_hat/cen_hat(1));          % Ref#1 eq B.18
+            Phiep_hat = -int_p + 2*(1-tr)*log(cep_hat/cen_hat(1));          % Ref#1 eq B.18
             
             % Terms for electrode potentials (Ref#1 eq A.6n)
             i0n = gamma_n/CC_rn*sqrt(cen_hat*sn*(1-sn));   % Negative electrode exchange current denisity (Ref#1 eq A.6n)
             i0p = gamma_p/CC_rp*sqrt(cep_hat*sp*(1-sp));   % Positive electrode exchange current denisity (Ref#1 eq A.6n)               
             
-            % Phin_hat calculation terms (Ref#1 eq B.27a and Ref#3 eq C.11)
+            % Phin_hat calculation terms (Ref#1 eq B.27a and Ref#3 eq C.9)
             iappTerm_n = -i_hat*(2*ln - xn').*xn'/(2*ln*Sigma_n) + i_hat*ln/(3*Sigma_n);                % First two terms of Ref#1 eq B.27a     
             intPhin_1 = -1/ln*0.5*dxn*(int_n(1:nE-1) + int_n(2:nE));                                    % Third term of Ref#1 eq B.27a
             intG_logCn = log(cen_hat/cen_hat(1));                                                       % Integrand in fourth term of Ref#1 eq B.27a
             intPhin_2 = 2*(1-tr)*(1+gamma_T*That)*0.5*dxn*(intG_logCn(1:nE-1) + intG_logCn(2:nE))/ln;   % Fourth term of Ref#1 eq B.27a
-            intG_BVn = etaBV_n; % i_hat./(ln*i0n);                                                      % Integrand in fifth term of Ref#1 eq B.27a
+            intG_BVn = etaBV_n;                                                                         % Integrand in fifth term of Ref#1 eq B.27a
             intPhin_3 = 2/ln*(1+gamma_T*That)*0.5*dxn*(intG_BVn(1:nE-1) + intG_BVn(2:nE));              % Fifth term of Ref#1 eq B.27a
-            iappFilm = i_hat*Lfn_hat_bar/(ln*Sigma_film_n);                                             % Fourth term of Ref#3 eq C.11
-            Phin_hat = Un + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + iappFilm)/lambda          % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.11)
+            iappFilm = i_hat*Lfn_hat_bar/(ln*Sigma_film_n);                                             % Fourth term of Ref#3 eq C.9
+            Phin_hat = Un + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + 0*iappFilm)/lambda          % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
 
             % Phip_hat calculation terms (Ref#1 eq B.27b)
             iappTerm_p = i_hat*(2*(1-lp) - xp').*xp'/(2*lp*Sigma_p) - i_hat*(2*lp^2 - 6*lp + 3)/(6*lp*Sigma_p); % First two terms of Ref#1 eq B.27b     
             intPhip_1 = -1/lp*0.5*dxp*(int_p(1:nE-1) + int_p(2:nE));                                            % Third term of Ref#1 eq B.27b
             intG_logCp = log(cep_hat/cen_hat(1));                                                               % Integrand in fourth term of Ref#1 eq B.27b
             intPhip_2 = 2*(1-tr)*(1+gamma_T*That)*0.5*dxp*(intG_logCp(1:nE-1) + intG_logCp(2:nE))/lp;           % Fourth term of Ref#1 eq B.27a
-            intG_BVp = etaBV_p; % i_hat./(lp*i0p);                                                              % Integrand in fifth term of Ref#1 eq B.27b
+            intG_BVp = etaBV_p;                                                                                 % Integrand in fifth term of Ref#1 eq B.27b
             intPhip_3 = -2/lp*(1+gamma_T*That)*0.5*dxp*(intG_BVp(1:nE-1) + intG_BVp(2:nE));                     % Fifth term of Ref#1 eq B.27b
             Phip_hat = Up + (iappTerm_p + intPhip_1 + intPhip_2 + intPhip_3)/lambda                             % Positive electrode potential (Ref#1 eq B.28b)
-
-            % Film resistance potential
-            Phi_fn = J_n*Lfn_hat/Sigma_film_n;                      % Potential drop across negative electrode film (Ref#3 eq A.10c, A.10e)
-
-            etan_hat = lambda*(Phin_hat - Un) - Phien_hat - Phi_fn;
-            etap_hat = lambda*(Phip_hat - Up) - Phiep_hat;
 
            
             % Terms for ageing dynamics
             epsn_init = eps_n0*ones(nE,1);  
+            Phi_fn = J_n*Lfn_hat/Sigma_film_n;                                            % Potential drop across negative electrode film (last term inside exponential of Ref#3 eq C.3b) ##
             etasei_hat = lambda*(Phin_hat - Usei_hat) - Phien_hat - Phi_fn;               % SEI over-potential (Ref#3 eq C.3b) ##
             etaLi_hat = lambda*(Phin_hat - ULi_hat) - Phien_hat - Phi_fn;                 % Li plating over-potential (Ref#3 eq C.3b) ##
-            %Jsei_hat = -i0sei_hat.*exp(-0.1*etasei_hat/(1+gamma_T*That));                 % SEI flux (Ref#3 eq C.3b with assuming alpha_sei = 0.1) ##
-            exp_term = exp(-0.1*etasei_hat/(1+gamma_T*That));                             % SEI flux (Ref#3 eq C.3b with assuming alpha_sei = 0.1 and with reaction rate j_sei substituted with Ref#3 B.1 and B.2. Note: there is an error in eq B.2, it should read c_sei_hat = 1 - CC_sei*Lfn_hat*Jsei_hat)
-            %Jsei_hat = -exp_term./(CC_rsei - CC_sei*Lfn_hat.*exp_term);
+            exp_term = exp(-0.1*etasei_hat/(1+gamma_T*That));                             % SEI exponent term, (Ref#3 eq C.3b) with alpha_sei set to 0.1 and temperature correction
             Jsei_hat_bar = (0.5*dxn*(Jsei_hat(1:nE-1) + Jsei_hat(2:nE)))/ln;              % Average (over negative electrolyte domain) SEI reaction (Ref#3 eq 66a), trapezoidal integration ##
-            JLi_hat = -i0Li_hat.*exp(-0.1*etaLi_hat/(1+gamma_T*That));                    % Li-plaitng side reaction current (Ref#3 eq A.10d with thermal coupling from Ref#1)
+            JLi_hat = -i0Li_hat.*exp(-0.1*etaLi_hat/(1+gamma_T*That));                    % Li-plaitng side reaction current (Ref#3 eq C.3b, j_li substituted with Ref#3 B.3 and thermal coupling from Ref#1)
             JLi_hat_bar = (0.5*dxn*(JLi_hat(1:nE-1) + JLi_hat(2:nE)))/ln;                 % Average (over negative electrolyte domain) Li plating reaction (Ref#3 eq 66a), trapezoidal integration ##
-            %i0sei_hat = 1./(CC_rsei + CC_sei*Lfn_hat)                                     % SEI exchange current density, i0sei_hat (Ref#3 eq B.1 and eq B.2)
             i0Li_hat = cen_hat/CC_rLi;                                                    % Li plating exchange current density (Ref#3 eq B.3)
             Jsr_hat_bar = Jsei_hat_bar + JLi_hat_bar;                                     % Average side-reation current
-            deps_nsei = Jsei_hat./(2*gamma_sei);                                          % Rate of of change of porosity due to sei 
-            deps_nLi = JLi_hat/(gamma_Li);                                                % Rate of change of porosity due to Li plating
+            deps_nsei = Jsei_hat./(2*gamma_sei);                                          % Rate of of change of porosity due to sei (Ref#3 eq C.7)
+            deps_nLi = JLi_hat/gamma_Li;                                                  % Rate of change of porosity due to Li plating (Ref#3 eq C.7)
             deps_n =  deps_nsei + deps_nLi;                                               % Overall rate of change of porosity                                               
-            eps_barsei = -L*0.5*dxn*(eps_nsei(1:nE-1) + eps_nsei(2:nE));                  % Porosity change (aussming zero initial sei porosity, is neagitve) multiply by -1 to make positive
-            eps_barLi = -L*0.5*dxn*(eps_nLi(1:nE-1) + eps_nLi(2:nE));                     % Porosity change (aussming zero initial Li plating porosity, is neagtive) multiply by -1 to make positive
-            % eps_bar = L*0.5*dxn*((epsn_init(1:nE-1) + epsn_init(2:nE)) - (eps_n(1:nE-1) + eps_n(2:nE)));  % Porosity change over negative electrode. Dimensional trapezoidal integration of Ref#3 eq 21 
-            eps_bar = L*0.5*dxn*((eps_n(1:nE-1) + eps_n(2:nE)))/Ln;                       % Average porosity over negative electrode. Dimensional trapezoidal integration
-            Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq A.12)
+            eps_barsei = -L*0.5*dxn*(eps_nsei(1:nE-1) + eps_nsei(2:nE));                  % Porosity change (aussming zero initial sei porosity, is negative) multiply by -1 to make positive
+            eps_barLi = -L*0.5*dxn*(eps_nLi(1:nE-1) + eps_nLi(2:nE));                     % Porosity change (aussming zero initial Li plating porosity, is negative) multiply by -1 to make positive
+            eps_bar = L*0.5*dxn*(eps_n(1:nE-1) + eps_n(2:nE))/Ln;                         % Average porosity over negative electrode. Dimensional trapezoidal integration
+            Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq C.8)
             Lfn_hat_bar = 0.5*dxn*(Lfn_hat(1:nE-1) + Lfn_hat(2:nE))/ln                    % Average film thickness (trapezoidal integration over spatial coordinates)
-            SoH_sei = (F*Area_p*2*eps_barsei*pho_sei/Msei)/Cn;                            % Capacity SoH [%] from SEI  (Ref#3 eq 21d and normalising by Cn)
-            SoH_Li = (F*Area_p*eps_barLi*pho_Li/MLi)/Cn;                                  % Capacity SoH [%] from Li-plating (Ref#3 eq 21d and normalising by Cn)
-            SoH_tot = 1 - (SoH_sei + SoH_Li)                                              % Total SoH [%] (Ref#3 eq 21d and normalising by Cn)
+            SoH_sei = (F*Area_p*2*eps_barsei*pho_sei/Msei)/Cn;                            % Capacity SoH [%] from SEI  (Ref#3 eq 21 for Nsr and normalising by Cn)
+            SoH_Li = (F*Area_p*eps_barLi*pho_Li/MLi)/Cn;                                  % Capacity SoH [%] from Li-plating (Ref#3 eq 21 for Nsr and normalising by Cn)
+            SoH_tot = 1 - (SoH_sei + SoH_Li)                                              % Total SoH [%] 
         in
             v == p.v - n.v
             
@@ -481,10 +474,10 @@ component TSPMeA
             Phie_hat == [Phien_hat;Phies_hat(2:nS-1);Phiep_hat]; 
             
             % SEI + Li-plating: Dimensionless
-            Jsei_hat == (-CC_sei*Lfn_hat.*Jsei_hat/CC_rsei - 1/CC_rsei).*exp_term;
-            t0*der(eps_n) == deps_n;                                          % Negative electrode porosity dynamics (Ref#3 eq 72 or eq A.11, assume non zero initial values eps_n0, for eps_n)
-            t0*der(eps_nsei) == deps_nsei;                                    % Negative electrode porosity dynamics due to SEI (Ref#3 eq 72 or eq A.11 but assuming zero inital values for eps_nsei, interested in relative change due to sei plaitng and not absolute)
-            t0*der(eps_nLi) == deps_nLi;                                      % Negative electrode porosity dynamics due to Li plating (Ref#3 eq 72 or eq A.11, but assuming zero inital values for eps_nLi, interested in relative change due to Li plaitng and not absolute)
+            Jsei_hat == (-CC_sei*Lfn_hat.*Jsei_hat/CC_rsei - 1/CC_rsei).*exp_term;  % SEI flux (Ref#3 eq C.3b with reaction rate j_sei substituted with Ref#3 B.1 and B.2
+            t0*der(eps_n) == deps_n;                                                % Negative electrode porosity dynamics (Ref#3 eq C.7, assume non zero initial values eps_n0, for eps_n)
+            t0*der(eps_nsei) == deps_nsei;                                          % Negative electrode porosity dynamics due to SEI (Ref#3 eq C.7 but assuming zero inital values for eps_nsei, interested in relative change due to sei plaitng and not absolute)
+            t0*der(eps_nLi) == deps_nLi;                                            % Negative electrode porosity dynamics due to Li plating (Ref#3 eq C.7, but assuming zero inital values for eps_nLi, interested in relative change due to Li plaitng and not absolute)
 
             % Dimensional variables: Concentrations
             cp == cp_hat*cp_max;                    % Solid concentration, +ve (Ref#1 eq A.4)
@@ -495,7 +488,7 @@ component TSPMeA
             Phie == Phie_hat*R*Tref/F                                               % Electrolyte potential, over full domain (Ref#1 eq A.4)
 
             % Dimensional variables SoH: Film thickness and cell capacity
-            Lf_bar == Lf0*Lfn_hat_bar;                                              % Average negative electrode film thickness (Ref#3 eq ??)
+            Lf_bar == Lf0*Lfn_hat_bar;                                              % Average negative electrode film thickness
             
             % Collect total SoH, and SoH due to SEI and Li plating
             SoH_Cn == [eps_bar; SoH_tot; SoH_sei; SoH_Li];                          % Average porosity, capacity SoH [%] total and the contributions from SEI and Li-plating (Ref#3 eq 21d and normalising by Cn)

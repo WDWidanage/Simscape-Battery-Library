@@ -27,6 +27,8 @@ for bb = 1:numel(block_paths)
         if ismember(model_type, ["TSPMe","TSPMeA"])
             modelStr_para.(model_name).s6 = [-1	-0.809016994374948	-0.309016994374947	0.309016994374947	0.809016994374948	1];                                                         % Six collocation points used in TSPMe on standard interval [-1,1]                                                                                                                                   % Three collocation points on standard interval [-1,1]
             modelStr_para.(model_name).s10 = [-1	-0.939692620785908	-0.766044443118978	-0.5	-0.173648177666930	0.173648177666930	0.5	0.766044443118978	0.939692620785908	1]; % Ten collocation points used in TSPMe on standard interval [-1,1]
+            modelStr_para.(model_name).nE = 10;
+            modelStr_para.(model_name).nS = 6;
         end
     else
         warning(sprintf("No block labelled '%s' in '%s.slx'",model_names(bb),modelStr))
