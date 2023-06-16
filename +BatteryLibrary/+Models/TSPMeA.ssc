@@ -438,17 +438,17 @@ component TSPMeA
             JLi_hat_bar = (0.5*dxn*(JLi_hat(1:nE-1) + JLi_hat(2:nE)))/ln;                 % Average (over negative electrolyte domain) Li plating reaction (Ref#3 eq 66a), trapezoidal integration ##
             i0Li_hat = cen_hat/CC_rLi;                                                    % Li plating exchange current density (Ref#3 eq B.3)
             Jsr_hat_bar = Jsei_hat_bar + JLi_hat_bar;                                     % Average side-reation current
-            deps_nsei = Jsei_hat./(2*gamma_sei);                                          % Rate of of change of porosity due to sei (Ref#3 eq C.7)
+            deps_nsei = Jsei_hat/(2*gamma_sei);                                           % Rate of of change of porosity due to sei (Ref#3 eq C.7)
             deps_nLi = JLi_hat/gamma_Li;                                                  % Rate of change of porosity due to Li plating (Ref#3 eq C.7)
             deps_n =  deps_nsei + deps_nLi;                                               % Overall rate of change of porosity                                               
             eps_barsei = -L*0.5*dxn*(eps_nsei(1:nE-1) + eps_nsei(2:nE));                  % Porosity change (aussming zero initial sei porosity, is negative) multiply by -1 to make positive
             eps_barLi = -L*0.5*dxn*(eps_nLi(1:nE-1) + eps_nLi(2:nE));                     % Porosity change (aussming zero initial Li plating porosity, is negative) multiply by -1 to make positive
-            eps_bar = L*0.5*dxn*(eps_n(1:nE-1) + eps_n(2:nE))/Ln;                         % Average porosity over negative electrode. Dimensional trapezoidal integration
+            epsn_bar = L*0.5*dxn*(eps_n(1:nE-1) + eps_n(2:nE))/Ln;                        % Average porosity over negative electrode. Dimensional trapezoidal integration
             Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq C.8)
             Lfn_hat_bar = 0.5*dxn*(Lfn_hat(1:nE-1) + Lfn_hat(2:nE))/ln                    % Average film thickness (trapezoidal integration over spatial coordinates)
             SoH_sei = (F*Area_p*2*eps_barsei*pho_sei/Msei)/Cn;                            % Capacity SoH [%] from SEI  (Ref#3 eq 21 for Nsr and normalising by Cn)
             SoH_Li = (F*Area_p*eps_barLi*pho_Li/MLi)/Cn;                                  % Capacity SoH [%] from Li-plating (Ref#3 eq 21 for Nsr and normalising by Cn)
-            SoH_tot = 1 - (SoH_sei + SoH_Li)                                              % Total SoH [%] 
+            SoH_tot = 1 - (SoH_sei + SoH_Li);                                             % Total SoH [%] 
         in
             v == p.v - n.v
             
@@ -491,7 +491,7 @@ component TSPMeA
             Lf_bar == Lf0*Lfn_hat_bar;                                              % Average negative electrode film thickness
             
             % Collect total SoH, and SoH due to SEI and Li plating
-            SoH_Cn == [eps_bar; SoH_tot; SoH_sei; SoH_Li];                          % Average porosity, capacity SoH [%] total and the contributions from SEI and Li-plating (Ref#3 eq 21d and normalising by Cn)
+            SoH_Cn == [epsn_bar; SoH_tot; SoH_sei; SoH_Li];                          % Average porosity, capacity SoH [%] total and the contributions from SEI and Li-plating (Ref#3 eq 21d and normalising by Cn)
             
             v == Phi0*(Phip_hat(end) - Phin_hat(1));            % Terminal voltage [V]            
             pots == [Phi0*Phip_hat(end);U;Phi0*Phin_hat(1)];    % Potentials as an output signal. Concatanation of +ve, OCV and -ve electrode potentials 

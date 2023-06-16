@@ -25,10 +25,13 @@ for bb = 1:numel(block_paths)
         modelStr_para.(model_name) = getBlockValuesUnits(block_path);
         modelStr_para.(model_name).model_type = model_type;
         if ismember(model_type, ["TSPMe","TSPMeA"])
-            modelStr_para.(model_name).s6 = [-1	-0.809016994374948	-0.309016994374947	0.309016994374947	0.809016994374948	1];                                                         % Six collocation points used in TSPMe on standard interval [-1,1]                                                                                                                                   % Three collocation points on standard interval [-1,1]
+            modelStr_para.(model_name).s6 = [-1	-0.809016994374948	-0.309016994374947	0.309016994374947	0.809016994374948	1];                                                         % Six collocation points used in TSPMe on standard interval [-1,1] 
             modelStr_para.(model_name).s10 = [-1	-0.939692620785908	-0.766044443118978	-0.5	-0.173648177666930	0.173648177666930	0.5	0.766044443118978	0.939692620785908	1]; % Ten collocation points used in TSPMe on standard interval [-1,1]
             modelStr_para.(model_name).nE = 10;
             modelStr_para.(model_name).nS = 6;
+        end
+        if ismember(model_type, "TECMD")
+            modelStr_para.(model_name).xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1]; % Six collocation points used in TECM on interval [0,1]                                                                                                                                  
         end
     else
         warning(sprintf("No block labelled '%s' in '%s.slx'",model_names(bb),modelStr))
@@ -41,6 +44,10 @@ end
 function model_type = getModelType(block_path)
 
 % Identify if model is TECM, TECMD, TSPMe or TSMPMeA
+try
+    get_param(block_path,'DialogParameters').RoLUT;
+    model_type = "TECM";
+end
 
 try
     get_param(block_path,'DialogParameters').TauRef;
