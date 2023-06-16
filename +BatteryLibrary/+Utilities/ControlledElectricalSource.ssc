@@ -1,0 +1,62 @@
+component ControlledElectricalSource
+    % Controlled Electrical Source : 1.5
+    % Use this block to specify a current, voltage or power interface 
+    % condition.
+    %    Intype: This input takes a value of either 0, 1 or 2 to indicate 
+    %            that the corresponding interface conditon is either 
+    %            current [A] (0), voltage [V] (1) or power [W] (2)
+    %    Input: This is a time signal of the corresponding current [A], or
+    %           voltage [V] or power [W] to be applied
+    %
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 25-06-2021 (A small step)
+    % All Rights Reserved
+    % Software may be used freely for non-comercial purposes only
+    
+    nodes
+        p = foundation.electrical.electrical; % +
+        n = foundation.electrical.electrical; % -
+    end
+    
+    inputs
+        % Input choice: Current: 0, Voltage: 1, Power: 2, inType
+        inType = {0, '1'};         % Intype
+
+        inputSignal = {0 ,'1'}     % Input
+    end
+    
+    % Annotate port/output locations
+    annotations
+        p: Side = top;      % +ve terminal
+        n: Side = bottom;   % -ve terminal
+        
+        % Parameter tab
+        Icon = 'icons\iconGenerator.png';
+    end
+    
+    
+    variables (Access = Protected)
+        v = {0, 'V'};            % Voltage
+        i = {0, 'A' };           % Current
+    end
+    
+    branches
+        i : n.i -> p.i;
+    end
+    
+    equations
+        let
+            unitConv_A = {1,'A'};            % A unit conversiton variable
+            unitConv_V = {1,'V'};            % A unit conversiton variable
+            unitConv_W = {1,'W'};            % A unit conversiton variable
+        in
+            v == p.v - n.v;
+            if inType == 0
+                i ==  inputSignal * unitConv_A;  
+            elseif inType == 1
+                v ==  inputSignal * unitConv_V;
+            else
+                v*i == inputSignal * unitConv_W;
+            end
+        end
+    end
+end
