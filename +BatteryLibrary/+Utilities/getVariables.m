@@ -1,13 +1,21 @@
 function  [dv,SF] = getVariables(simout, block_names, nvp)
-% Get the distibuted, average and time variables of TECMD, TSPMe and TSPMeA
-% via post processing
+% Get the time and distributed variables of the models found in the 
+% sismcape BatteryLibrary, once a simulation run is complete.
 %
 % Mandtory inputs
-%   simout: This is the output that Simulink generates in the workspage
-%           when you run a Simulink model or when you call the "sim"
-%           command to simulate a Simulink model.
+%   simout: Simulink.SimulationOutput type. This is the output that 
+%           Simulink generates in the workspage when you run a Simulink 
+%           model or when you call the "sim" command to simulate a 
+%           Simulink model. 
 %   block_names: Specify the names of the BatteryLibrary components that
-%               were used in the simulink model as a vector of strings.
+%               were used in the simulink model as a vector of strings..
+%
+% Optional inouts (name-value pairs)
+%   state_name: This is the name of the states that in the simout
+%                 simulink object "xout" (default)
+%   time_limits: A two element numeric vector indicating a time interval 
+%                [s] to plot the results, useful when simulation time is
+%                very large.
 %
 % W.D.Widanage 24/05/2023 (Nothing else matters)
 
@@ -327,10 +335,13 @@ Sigma_n = sf.Sigma_n;
 Sigma_p = sf.Sigma_p;
 gamma_T = sf.gamma_T;
 lambda = sf.lambda;
-beta_sr = sf.beta_sr;
-Sigma_film_n = sf.Sigma_film_n;
-epsn_init = para.eps_n0;
-Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq C.8)
+
+if ismember(para.model_type,"TSPMeA")
+    beta_sr = sf.beta_sr;
+    Sigma_film_n = sf.Sigma_film_n;
+    epsn_init = para.eps_n0;
+    Lfn_hat = 1 - (eps_n - epsn_init)/beta_sr;                                    % Negative electrode film thickness (Ref#3 eq C.8)
+end
 
 % OCVs
 sn = cn_hat(:,end);
@@ -356,7 +367,11 @@ for tt = 1:num_time_points
 
 
     % Electrolyte potential terms
-    inG_n = J_n(tt)*xn'./(Sigma_e(tt)*ss_en.*(eps_n(tt,:)'.^1.5));   % Integrand term in Ref#1 eq B.18 ##
+    if ismember(para.model_type,"TSPMe")
+        inG_n = J_n(tt)*xn'./(Sigma_e(tt)*ss_en.*(eps_n^1.5));   % Integrand term in Ref#1 eq B.18 ##
+    elseif ismember(para.model_type,"TSPMeA")
+        inG_n = J_n(tt)*xn'./(Sigma_e(tt)*ss_en.*(eps_n(tt,:)'.^1.5));   % Integrand term in Ref#1 eq B.18 ##
+    end
     inG_s = i.i_hat(tt)./(Sigma_e(tt)*ss_es*eps_s^1.5);             % Integrand term in Ref#1 eq B.18
     inG_p = J_p(tt)*(1-xp)'./(Sigma_e(tt)*ss_ep*eps_p^1.5);             % Integrand term in Ref#1 eq B.18
 
@@ -376,10 +391,13 @@ for tt = 1:num_time_points
     intPhin_2 = 2*(1-tr)*(1+gamma_T*That(tt))*0.5*dxn*(intG_logCn(1:nE-1) + intG_logCn(2:nE))/ln;   % Fourth term of Ref#1 eq B.27a
     intG_BVn = etaBV_n(tt,:)';                                                                             % Integrand in fifth term of Ref#1 eq B.27a
     intPhin_3 = 2/ln*(1+gamma_T*That(tt))*0.5*dxn*(intG_BVn(1:nE-1) + intG_BVn(2:nE));                  % Fifth term of Ref#1 eq B.27a
-    Lfn_hat_bar = 0.5*dxn*(Lfn_hat(tt,1:nE-1) + Lfn_hat(tt,2:nE))'/ln;                    % Average film thickness (trapezoidal integration over spatial coordinates)
-    iappFilm = i.i_hat(tt)*Lfn_hat_bar/(ln*Sigma_film_n(tt));                                                 % Fourth term of Ref#3 eq C.9
-    Phin_hat(tt,:) = Un(tt) + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + 0*iappFilm)/lambda;             % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
-
+    if ismember(para.model_type,"TSPMe")
+        Phin_hat(tt,:) = Un(tt) + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3)/lambda;             % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
+    elseif ismember(para.model_type,"TSPMeA")
+        Lfn_hat_bar = 0.5*dxn*(Lfn_hat(tt,1:nE-1) + Lfn_hat(tt,2:nE))'/ln;                    % Average film thickness (trapezoidal integration over spatial coordinates)
+        iappFilm = i.i_hat(tt)*Lfn_hat_bar/(ln*Sigma_film_n(tt));                                                 % Fourth term of Ref#3 eq C.9
+        Phin_hat(tt,:) = Un(tt) + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + iappFilm)/lambda;             % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
+    end
 
     % Phip_hat calculation terms (Ref#1 eq B.27b)
     iappTerm_p = i.i_hat(tt)*(2*(1-lp) - xp').*xp'/(2*lp*Sigma_p(tt)) - i.i_hat(tt)*(2*lp^2 - 6*lp + 3)/(6*lp*Sigma_p(tt)); % First two terms of Ref#1 eq B.27b
@@ -392,8 +410,9 @@ for tt = 1:num_time_points
 
 end
 
-phi.Phie_hat = [Phien_hat,Phies_hat(:,2:nS-1),Phiep_hat];
 phi.Phien_hat = Phien_hat;
+phi.Phie_hat = [Phien_hat,Phies_hat(:,2:nS-1),Phiep_hat];
+phi.Phiep_hat = Phiep_hat;
 phi.Phie = phi.Phie_hat*R*Tref/F;
 phi.Phin = Phin_hat;                        % Both non-dimensional and diemnsional are the same
 phi.Phip = Phip_hat;                        % Both non-dimensional and diemnsional are the same
@@ -538,34 +557,19 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
     Ea_sigman = value(simscape.Value(para.Ea_sigman,para.Ea_sigman_unit),'J/mol');
     Ea_sigmae = value(simscape.Value(para.Ea_sigmae,para.Ea_sigmae_unit),'J/mol');
     Ea_sigmap = value(simscape.Value(para.Ea_sigmap,para.Ea_sigmap_unit),'J/mol');
-    Ea_sigmasei = value(simscape.Value(para.Ea_sigmasei,para.Ea_sigmasei_unit),'J/mol');
-    Ea_ksei = value(simscape.Value(para.Ea_ksei,para.Ea_ksei_unit),'J/mol');
-    Ea_kLi = value(simscape.Value(para.Ea_kLi,para.Ea_kLi_unit),'J/mol');
-    Ea_Dsei = value(simscape.Value(para.Ea_Dsei,para.Ea_Dsei_unit),'J/mol');
+   
     sigma_nRef = value(simscape.Value(para.sigma_nRef,para.sigma_nRef_unit),'S/m');
     sigma_eRef = value(simscape.Value(para.sigma_eRef,para.sigma_eRef_unit),'S/m');
     sigma_pRef = value(simscape.Value(para.sigma_pRef,para.sigma_pRef_unit),'S/m');
-    sigma_seiRef = value(simscape.Value(para.sigma_seiRef,para.sigma_seiRef_unit),'S/m');
-    kseiRef = value(simscape.Value(para.kseiRef,para.kseiRef_unit),'m/s');
-    kLiRef = value(simscape.Value(para.kLiRef,para.kLiRef_unit),'m/s');
-    DseiRef = value(simscape.Value(para.DseiRef,para.DseiRef_unit),'m^2/s');
-
-    Lf0 = value(simscape.Value(para.Lf0,para.Lf0_unit),'m');
-
+   
     kp = kpRef*exp(Ea_kp/R*(1/Tref-1./T));                      % Arrhenius equation for postive electrode reaction rate: kp
     sigma_n = sigma_nRef*exp(Ea_sigman/R*(1/Tref-1./T));        % Arrhenius equation for negative electrode conductivity: sigma_n
     sigma_e = sigma_eRef*exp(Ea_sigmae/R*(1/Tref-1./T));        % Arrhenius equation for electrolyte conductivity: sigma_e
     sigma_p = sigma_pRef*exp(Ea_sigmap/R*(1/Tref-1./T));        % Arrhenius equation for positive electrode conductivity: sigma_p
-    sigma_sei = sigma_seiRef*exp(Ea_sigmasei/R*(1/Tref-1./T));  % Arrhenius equation for sei conductivity: sigma_sei ##
-    ksei = kseiRef*exp(Ea_ksei/R*(1/Tref-1./T));                % Arrhenius equation for negative electrode sei reaction rate: ksei ##
-    kLi = kLiRef*exp(Ea_kLi/R*(1/Tref-1./T));                   % Arrhenius equation for negative electrode Li plating reaction rate: kLi ##
-    Dsei = DseiRef*exp(Ea_Dsei/R*(1/Tref-1./T));                % Arrhenius equation for negative electrode sei diffusion coeffcient: Dsei ##
-
-
+    
     cp_max = para.cp_max;
     cn_max = para.cn_max;
     an = para.an;
-    csei0 = para.csei0;
 
     Cn = value(simscape.Value(para.Cn,para.Cn_unit),'A*hr');
     Area_p = value(simscape.Value(para.Area_p,para.Area_p_unit),'m^2');
@@ -580,12 +584,7 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
 
     ce0 = value(simscape.Value(para.ce0,para.ce0_unit),'mol/m^3');
 
-    % Non-dimensional ageing parameters
-    CC_rsei = cn_max./(ksei*an*t0*csei0);                % SEI exchange current parameter (Ref#3 eq B.4) ##
-    CC_sei = Lf0*cn_max./(Dsei*an*t0*csei0);             % SEI concentration parameter (Ref#3 eq eq B.4) ##
-    CC_rLi = cn_max./(kLi*an*t0*ce0);                    % Li plating exchange current parameter (Ref#3 eq eq B.4) ##
-    Sigma_film_n = R*Tref*sigma_sei*an*L/(F*Lf0*i0);    % Ratio of thermal voltage to typical ohmic drop in the negative electrode film (Ref#3 eq A.14) ##
-
+   
     % Store scaling factors
     sf.gamma_p = cp_max/cn_max;            % Ratio of maximum lithium concentrations in electrode to maximum concentration in negative electrode
     sf.CC_rp = F./(kp*ap*sqrt(ce0)*t0);    % Radius of active material particle
@@ -595,12 +594,8 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
     sf.Sigma_e = R*Tref*sigma_e/(F*L*i0);   % Ratio of thermal voltage to typical ohmic drop in the electrolyte (Ref#1 eq A.9)
     sf.Sigma_p = R*Tref*sigma_p/(F*L*i0);   % Ratio of thermal voltage to typical ohmic drop in the positive electrode (Ref#1 eq A.9)
     sf.gamma_T = R*cn_max/Cp;               % Ratio of temperautre variation to reference temperature
-    sf.beta_sr = an*Lf0;
-    sf.Sigma_film_n = Sigma_film_n;
+    
     sf.lambda = lambda;
-    sf. CC_rsei = CC_rsei;
-    sf.CC_sei = CC_sei;
-    sf.CC_rLi = CC_rLi;
 
     % Store varying parameters
     sf.kp = kp;
@@ -608,6 +603,40 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
     sf.sigma_e = sigma_e;
     sf.sigma_p = sigma_p;
     sf.That = (T - Tref)*Cp/(R*Tref*cn_max);
+
+    if ismember(para.model_type,"TSPMeA")
+        Lf0 = value(simscape.Value(para.Lf0,para.Lf0_unit),'m');
+
+        Ea_sigmasei = value(simscape.Value(para.Ea_sigmasei,para.Ea_sigmasei_unit),'J/mol');
+        Ea_ksei = value(simscape.Value(para.Ea_ksei,para.Ea_ksei_unit),'J/mol');
+        Ea_kLi = value(simscape.Value(para.Ea_kLi,para.Ea_kLi_unit),'J/mol');
+        Ea_Dsei = value(simscape.Value(para.Ea_Dsei,para.Ea_Dsei_unit),'J/mol');
+
+        sigma_seiRef = value(simscape.Value(para.sigma_seiRef,para.sigma_seiRef_unit),'S/m');
+        kseiRef = value(simscape.Value(para.kseiRef,para.kseiRef_unit),'m/s');
+        kLiRef = value(simscape.Value(para.kLiRef,para.kLiRef_unit),'m/s');
+        DseiRef = value(simscape.Value(para.DseiRef,para.DseiRef_unit),'m^2/s');
+
+        sigma_sei = sigma_seiRef*exp(Ea_sigmasei/R*(1/Tref-1./T));  % Arrhenius equation for sei conductivity: sigma_sei ##
+        ksei = kseiRef*exp(Ea_ksei/R*(1/Tref-1./T));                % Arrhenius equation for negative electrode sei reaction rate: ksei ##
+        kLi = kLiRef*exp(Ea_kLi/R*(1/Tref-1./T));                   % Arrhenius equation for negative electrode Li plating reaction rate: kLi ##
+        Dsei = DseiRef*exp(Ea_Dsei/R*(1/Tref-1./T));                % Arrhenius equation for negative electrode sei diffusion coeffcient: Dsei ##
+
+        csei0 = para.csei0;
+
+        % Non-dimensional ageing parameters
+        CC_rsei = cn_max./(ksei*an*t0*csei0);                % SEI exchange current parameter (Ref#3 eq B.4) ##
+        CC_sei = Lf0*cn_max./(Dsei*an*t0*csei0);             % SEI concentration parameter (Ref#3 eq eq B.4) ##
+        CC_rLi = cn_max./(kLi*an*t0*ce0);                    % Li plating exchange current parameter (Ref#3 eq eq B.4) ##
+        Sigma_film_n = R*Tref*sigma_sei*an*L/(F*Lf0*i0);    % Ratio of thermal voltage to typical ohmic drop in the negative electrode film (Ref#3 eq A.14) ##
+
+        sf.beta_sr = an*Lf0;
+        sf.Sigma_film_n = Sigma_film_n;
+        sf. CC_rsei = CC_rsei;
+        sf.CC_sei = CC_sei;
+        sf.CC_rLi = CC_rLi;
+    end
+
 
 elseif ismember(para.model_type,"TECMD")
     R = 8.3144;       % Universal gas constant

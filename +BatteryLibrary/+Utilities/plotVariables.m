@@ -1,18 +1,25 @@
 function plotVariables(simout,block_names,nvp)
-% Plot the distributed varaibles of TECMD, TSPMe and TSPMeA model types,
-% found in the sismcape BatteryLibrary, once a simulation run is complete.
+% Plot the time and distributed variables of the models found in the
+% sismcape BatteryLibrary, once a simulation run is complete.
 %
 % Mandtory inputs
-%   simout: This is the output that Simulink generates in the workspage
-%           when you run a Simulink model or when you call the "sim"
-%           command to simulate a Simulink model.
+%   simout: Simulink.SimulationOutput type. This is the output that
+%           Simulink generates in the workspage when you run a Simulink
+%           model or when you call the "sim" command to simulate a
+%           Simulink model.
 %   block_names: Specify the names of the BatteryLibrary components that
 %               were used in the simulink model as a vector of strings.
 %
 % Optional inouts (name-value pairs)
-%   "plot": "all" (default),
-%   "state_name": This is the name of the states that in the simout
+%   plot: "summary" (default), or a list of variables to plot
+%   state_name: This is the name of the states that in the simout
 %                 simulink object "xout" (default)
+%   number_of_snapshots: A numeric value to indicate the number of number
+%                        of snapshots to plot of the distributed
+%                        variables. 10 (default)
+%   time_limits: A two element numeric vector indicating a time interval
+%                [s] to plot the results, useful when simulation time is
+%                very large.
 %
 % W.D.Widanage, WMG, University of Warwick, Coventry, UK. 30/05/2023 (Interrogation)
 
@@ -66,102 +73,109 @@ end
 number_of_figures = numel(block_names);
 
 
-for pp = 1:number_of_figures
-    block_name = block_names(pp);
-    dv = getVariables(simout,block_name,"state_name",state_name,"time_limits",nvp.time_limits);
+for ff = 1:number_of_figures
+    block_name = block_names(ff);
+    number_of_experiments = numel(simout);
+    t_start = 0;                            % Initialise starting time value
+    for ee = 1:number_of_experiments
+        dv = getVariables(simout(ee),block_name,"state_name",state_name,"time_limits",nvp.time_limits);
 
-    if dv.(block_name).block_present == 1
-        model_type = dv.(block_name).model_type;
+        if dv.(block_name).block_present == 1
+            model_type = dv.(block_name).model_type;
 
-        if nvp.plot == "summary"
-            if model_type == "TECM",  plot_varaibles = TECM_variables_summary; end
-            if model_type == "TECMD",  plot_varaibles = TECMD_variables_summary; end
-            if model_type == "TSPMe", plot_varaibles = TSPMe_variables_summary; end
-            if model_type == "TSPMeA", plot_varaibles = TSPMeA_variables_summary; end
-        else
-            plot_varaibles = nvp.plot;
-        end
-        set_of_time_plots = intersect(plot_varaibles,variables_time);
-        set_of_dist_plots = intersect(plot_varaibles,variables_dist);
+            if nvp.plot == "summary"
+                if model_type == "TECM",  plot_varaibles = TECM_variables_summary; end
+                if model_type == "TECMD",  plot_varaibles = TECMD_variables_summary; end
+                if model_type == "TSPMe", plot_varaibles = TSPMe_variables_summary; end
+                if model_type == "TSPMeA", plot_varaibles = TSPMeA_variables_summary; end
+            else
+                plot_varaibles = nvp.plot;
+            end
+            set_of_time_plots = intersect(plot_varaibles,variables_time);
+            set_of_dist_plots = intersect(plot_varaibles,variables_dist);
 
-        number_of_time_plots = numel(set_of_time_plots);
-        number_of_dist_plots = numel(set_of_dist_plots);
+            number_of_time_plots = numel(set_of_time_plots);
+            number_of_dist_plots = numel(set_of_dist_plots);
 
-        time_array = dv.(block_name).time;
-        number_of_timepoints = length(time_array);
-        number_of_snapshots = nvp.number_of_snapshots;
-        if (number_of_snapshots > number_of_timepoints) && (number_of_dist_plots)
-            number_of_snapshots = number_of_timepoints;
-            warning("Number of snapshots (%d) is larger than number of time points (%d), setting number_of_snapshots to %d",number_of_snapshots,number_of_timepoints,number_of_snapshots)
-        end
-        time_indices = floor(linspace(1,number_of_timepoints,number_of_snapshots));
+            time_array = dv.(block_name).time;
+            if number_of_experiments > 1
+                time_array = time_array + t_start;
+                t_start = time_array(end);
+            end
+            number_of_timepoints = length(time_array);
+            number_of_snapshots = nvp.number_of_snapshots;
+            if (number_of_snapshots > number_of_timepoints) && (number_of_dist_plots)
+                number_of_snapshots = number_of_timepoints;
+                warning("Number of snapshots (%d) is larger than number of time points (%d), setting number_of_snapshots to %d",number_of_snapshots,number_of_timepoints,number_of_snapshots)
+            end
+            time_indices = floor(linspace(1,number_of_timepoints,number_of_snapshots));
 
 
-        % Get the min and max values of the distributed variables
-        for pp = 1:number_of_dist_plots
-            variable_str = set_of_dist_plots(pp);
-            ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str);
-            min_max{pp,1} = {[min(ordinate,[],"all"),max(ordinate,[],"all")]};
-        end
+            % Get the min and max values of the distributed variables
+            for pp = 1:number_of_dist_plots
+                variable_str = set_of_dist_plots(pp);
+                ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str);
+                min_max{pp,1} = {[min(ordinate,[],"all"),max(ordinate,[],"all")]};
+            end
 
-        figure()
-        plot_handle = tiledlayout("flow");
-        title(plot_handle,block_name)
+            if ee == 1
+                figure(ff)
+                plot_handle = tiledlayout("flow");
+                title(plot_handle,block_name)
+            end
 
-        % Get time data sets for each of the variables
-        tile_time_cntr = 1;
-        for pp = 1:number_of_time_plots
-            variable_str = set_of_time_plots(pp);
-            ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str);
-            abscissa = dv.(block_name).(domain_dict(variable_str));
+            % Get time data sets for each of the variables
+            tile_time_cntr = 1;
+            for pp = 1:number_of_time_plots
+                variable_str = set_of_time_plots(pp);
+                ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str);
+                % abscissa = dv.(block_name).(domain_dict(variable_str));
+                xlabel_str = xlabel_dict(variable_str);
+                ylabel_str = ylabel_dict(variable_str);
 
-            xlabel_str = xlabel_dict(variable_str);
-            ylabel_str = ylabel_dict(variable_str);
+                time_figure_handle(pp) = nexttile(tile_time_cntr); hold on;
+                plot(time_array,ordinate,'. -')
+                xlabel(xlabel_str);
+                ylabel(ylabel_str);
 
-            time_figure_handle(pp) = nexttile(tile_time_cntr);
-            plot(time_array,ordinate,'. -')
-            xlabel(xlabel_str);
-            ylabel(ylabel_str);
+                tile_time_cntr = tile_time_cntr + 1;
+            end
 
-            tile_time_cntr = tile_time_cntr + 1;
-        end
+            % Get distributed data sets for each of the variables
+            if number_of_dist_plots
+                for tt = time_indices
+                    % Plot vertical time line on the time plots
+                    for vv = 1:number_of_time_plots
+                        y_limits = time_figure_handle(vv).YLim;
+                        time_points = [time_array(tt),time_array(tt)];
+                        nexttile(vv); hold on;
+                        plot(time_points,y_limits,'--',"LineWidth",1)
+                    end
 
-        % Get distributed data sets for each of the variables
-        if number_of_dist_plots
-            for tt = time_indices
-                % Plot vertical time line on the time plots
-                for vv = 1:number_of_time_plots
-                    y_limits = time_figure_handle(vv).YLim;
-                    time_points = [time_array(tt),time_array(tt)];
-                    nexttile(vv); hold on;
-                    plot(time_points,y_limits,'--',"LineWidth",1)
+                    tile_dist_cntr = tile_time_cntr + 1;
+                    for pp = 1:number_of_dist_plots
+                        variable_str = set_of_dist_plots(pp);
+                        ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str)(tt,:);
+                        domain = split(domain_dict(variable_str),'.');
+                        abscissa = dv.(block_name).(domain(1)).(domain(2));
+
+                        xlabel_str = xlabel_dict(variable_str);
+                        ylabel_str = ylabel_dict(variable_str);
+
+                        nexttile(tile_dist_cntr)
+                        plot(abscissa,ordinate,'. -')
+                        ylim(min_max{pp}{1});
+                        xlabel(xlabel_str);
+                        ylabel(ylabel_str);
+
+                        tile_dist_cntr = tile_dist_cntr + 1;
+                    end
+                    pause(0.05)
                 end
-
-                tile_dist_cntr = tile_time_cntr + 1;
-                for pp = 1:number_of_dist_plots
-                    variable_str = set_of_dist_plots(pp);
-                    ordinate  = dv.(block_name).(field_dict(variable_str)).(variable_str)(tt,:);
-                    domain = split(domain_dict(variable_str),'.');
-                    abscissa = dv.(block_name).(domain(1)).(domain(2));
-
-                    xlabel_str = xlabel_dict(variable_str);
-                    ylabel_str = ylabel_dict(variable_str);
-
-                    nexttile(tile_dist_cntr)
-                    plot(abscissa,ordinate,'. -')
-                    ylim(min_max{pp}{1});
-                    xlabel(xlabel_str);
-                    ylabel(ylabel_str);
-
-                    tile_dist_cntr = tile_dist_cntr + 1;
-                end
-                pause(0.05)
             end
         end
+
     end
-
 end
-
-
 end
 

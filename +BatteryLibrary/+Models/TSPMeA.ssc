@@ -47,7 +47,7 @@ component TSPMeA
         % SoH vector of four entries:
         % - average -ve electrode porosity, 
         % - normalised theoretical capacity,
-        % - SeI percentage contribution to capacity fade
+        % - SEI percentage contribution to capacity fade
         % - Li plating contribution to capacity fade
         SoH_Cn = {[0.3; 1; 0; 0],'1'};  % sohC     
 
@@ -75,7 +75,7 @@ component TSPMeA
         % Potentials: dimensionless
         Phie_hat = zeros(2*nE+nS-2,1);        % Electrolyte potential: Dimensionless
               
-        % Butler Volmer intercolation loss eta, dimensionless. These varaibles are required since "asinh" is not supported in Simpscape but "sinh" is supported.
+        % Butler Volmer intercolation loss eta, dimensionless. These varaibles are required since "asinh" is not supported in Simscape but "sinh" is supported.
         etaBV_n = zeros(nE,1);                % Negative electrode BV loss
         etaBV_p = zeros(nE,1);                % Postive electrode BV loss
         
@@ -273,11 +273,9 @@ component TSPMeA
         Un = 1.9793*exp(-39.3631*sn)+0.2482-0.0909*tanh(29.8538*(sn-0.1234))- 0.04478*tanh(14.9159*(sn-0.2769)) - 0.0205*tanh(30.44*(sn-0.6103));
         Usei_hat = value(Usei,'V');                          % Extract SEI OCV value without units  
         ULi_hat = value(ULi,'V');                            % Extract Li OCV value without units
-        t0_value = value(t0,'s');                            % Extract t0 value without units
-
         
         % Non-dimensional temperature signal for use in Butler-Volmer (Ref#1 eq A.6l)
-        That = (T - Tref)*Cp/(R*Tref*cn_max);                   % Ref#1 eq A.4
+        That = (T - Tref)*Cp/(R*Tref*cn_max);                     % Ref#1 eq A.4
                
         % Thermal dependance of parameters
         kn = knRef*exp(Ea_kn/R*(1/Tref-1/T))                      % Arrhenius equation for negative electrode reaction rate: kn
@@ -381,12 +379,12 @@ component TSPMeA
             dcedx_nTmp = D10n*cen_hat;
             dcedx_sTmp = D6s*ces_hat;
             dcedx_pTmp = D10p*cep_hat;
+            
             dcedx_n =  [0; dcedx_nTmp(2:nE-1); (DD_es(1)*eps_s^1.5)/(DD_en(nE)*eps_n(nE)^1.5)*dcedx_sTmp(1)];                                                         % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface) ##
             dcedx_s =  [(DD_en(nE)*eps_n(nE)^1.5)/(DD_es(1)*eps_s^1.5)*dcedx_nTmp(nE); dcedx_sTmp(2:nS-1); (DD_ep(1)*eps_p^1.5)/(DD_es(nS)*eps_s^1.5)*dcedx_pTmp(1)];  % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface) ##
             dcedx_p =  [(DD_es(nS)*eps_s^1.5)/(DD_ep(1)*eps_p^1.5)*dcedx_sTmp(nS); dcedx_pTmp(2:nE-1); 0];                                                             % Include interior and outer Neumann boundary values (enforce flux continuity at seperator electrode interface)
             
             dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n;   % RHS Ref#3 eq. C.5a  (Assume porsity is constant over the short time scale), then epsilon can be taken out of the derivation and in Ref#3 eq. C.5a
-            %dcedt_n = gamma_e*D10n*(DD_en.*(eps_n.^1.5).*dcedx_n) + (1-tr)*CC_e*J_n  - t0_value*CC_e*gamma_e*cen_hat.*deps_n;
             dcedt_s = gamma_e*D6s*(DD_es*(eps_s^1.5).*dcedx_s);                        % RHS Ref#3 eq. C.5a       
             dcedt_p = gamma_e*D10p*(DD_ep*(eps_p^1.5).*dcedx_p) + (1-tr)*CC_e*J_p;     % RHS Ref#3 eq. C.5a
             
@@ -415,7 +413,7 @@ component TSPMeA
             intG_BVn = etaBV_n;                                                                         % Integrand in fifth term of Ref#1 eq B.27a
             intPhin_3 = 2/ln*(1+gamma_T*That)*0.5*dxn*(intG_BVn(1:nE-1) + intG_BVn(2:nE));              % Fifth term of Ref#1 eq B.27a
             iappFilm = i_hat*Lfn_hat_bar/(ln*Sigma_film_n);                                             % Fourth term of Ref#3 eq C.9
-            Phin_hat = Un + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + 0*iappFilm)/lambda          % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
+            Phin_hat = Un + (iappTerm_n + intPhin_1 + intPhin_2 + intPhin_3 + iappFilm)/lambda          % Negative electrode potential (Ref#1 eq B.28a), with ageing potential drop added (from Ref#3 eq C.9)
 
             % Phip_hat calculation terms (Ref#1 eq B.27b)
             iappTerm_p = i_hat*(2*(1-lp) - xp').*xp'/(2*lp*Sigma_p) - i_hat*(2*lp^2 - 6*lp + 3)/(6*lp*Sigma_p); % First two terms of Ref#1 eq B.27b     
