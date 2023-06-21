@@ -3,7 +3,7 @@ A Li-ion battery library written in Matlab Simscape language (Matlab 2023a). Bat
 1. A thermally coupled Equivalent Circuit Model (first order) with look-up-tables for the parameters (**TECM**)
 2. A thermally coupled Equivalent Circuit Model with Diffusion (**TECMD**)
 3. A thermally coupled Single Particle Model with Electrolyte (**TSPMe**)   
-4. A thermally coupled Single Particle Model with Electrolyte and ageing (**TSPMeA**). Ageing includes SEI growth, Li-plating and negative electrode porosity reduction. 
+4. A thermally coupled Single Particle Model with Electrolyte and Ageing (**TSPMeA**). Ageing includes SEI growth, Li-plating and negative electrode porosity reduction. 
 - A few utility components to define the interface conditions with the battery models
     - a simple battery cycler with CCCV charging, 
     - a general electrical source - I/V/P 
