@@ -26,7 +26,9 @@ A Li-ion battery library written in Matlab Simscape language (Matlab 2023a). Bat
 The TSPMe and TSPMeA models are result of the following two papers done in collaboration with Ferran Brosa-Planella. 
 - [TSPMe](https://www.sciencedirect.com/science/article/pii/S0307904X22005959)
 - [TSPMeA](https://www.sciencedirect.com/science/article/pii/S0013468621008148)
+
 The Parameters for the physcial models are from the work done in collaboration with University of Birmingham
 - [TSPMe parameters](https://iopscience.iop.org/article/10.1149/1945-7111/ab9050/meta)
+
 The TECMD is a simplified (only a single OCV + diffusion) of the work done in collaboration with Chuanxin Fan
 - [TECMD](https://wrap.warwick.ac.uk/166065/1/WRAP-Data-driven-identification-of-lithium-ion-batteries-Fan-22.pdf)
