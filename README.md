@@ -11,7 +11,7 @@ A Li-ion battery library written in Matlab Simscape language (Matlab 2023a). Bat
 
 # Installation
 - Clone (or download) the repository. 
-- Add the top level directory ("BatterySimscape_Library") in to the Matlab [path](https://uk.mathworks.com/help/matlab/matlab_env/add-remove-or-reorder-folders-on-the-search-path.html) (you can do this via the Matlab command >>`addpath(" _path to BatterySimscape_Library_ ")`).
+- Add the top level directory ("BatterySimscape_Library") in to the Matlab [path](https://uk.mathworks.com/help/matlab/matlab_env/add-remove-or-reorder-folders-on-the-search-path.html) (you can do this via the Matlab command >>`addpath(_path to BatterySimscape_Library_)`).
 - Once added to the path, to start using the libarary componets from any location, run the command >>`BatteryLibrary_lib` which will open the battery library and the blocks can be dragged into a Simulink template (.slx or .mdl) file 
 
 # Usage
