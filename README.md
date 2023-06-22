@@ -1,4 +1,4 @@
-# Simscape-Battery-Library
+# Simscape-Battery-Library [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=WDWidanage/Simscape-Battery-Library)
 A Li-ion battery library written in Matlab Simscape language (Matlab 2023a). Battery library includes: 
 1. A thermally coupled Equivalent Circuit Model (first order) with look-up-tables for the parameters (**TECM**)
 2. A thermally coupled Equivalent Circuit Model with Diffusion (**TECMD**)
@@ -14,7 +14,8 @@ A Li-ion battery library written in Matlab Simscape language (Matlab 2023a). Bat
 - Clone (or download) the repository. 
 - Add the top level directory ("BatterySimscape_Library") in to the Matlab [path](https://uk.mathworks.com/help/matlab/matlab_env/add-remove-or-reorder-folders-on-the-search-path.html) (you can do this via the Matlab command `>>addpath(path to BatterySimscape_Library)`).
 - Once added to the path, to start using the libarary componets from any location in Matlab, run the command `>>BatteryLibrary_lib` which will open the battery library and the blocks can be dragged into a Simulink template (.slx or .mdl) file 
-- You can also try all the examples online if you have a MathWorks account from here [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=WDWidanage/Simscape-Battery-Library) Make sure to add the repo folder to the Matalb path online as well. You should have a folder called 'Simscape-Battery-Library', right click, go to 'Add to path' and select 'Selected Folder(s) and Subfolders'. 
+- You can also try all the examples online if you have a MathWorks account from here [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=WDWidanage/Simscape-Battery-Library). 
+  Make sure to add the repo folder to the Matalb path online as well. You should have a folder called 'Simscape-Battery-Library', right click, go to 'Add to path' and select 'Selected Folder(s) and Subfolders'. 
 
 
 # Usage
