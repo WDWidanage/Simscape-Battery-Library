@@ -29,7 +29,7 @@ component TSPMe
             UIGroup("Kinetics", knRef,kpRef)
             UIGroup("Thermal", Cp, Tref, Ea_kn,Ea_kp, Ea_Dn,Ea_Dp, Ea_De,Ea_sigman, Ea_sigmae, Ea_sigmap)
             UIGroup("Domain geometry", Ln,Ls,Lp, Area_p, eps_n,eps_s,eps_p, Rn,Rp, an,ap)];
-        Icon = 'icons\iconTSPMe.png';
+        Icon = 'icons/iconTSPMe.png';
 
     end
     

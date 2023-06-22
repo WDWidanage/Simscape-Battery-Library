@@ -45,7 +45,7 @@ component TECM
             UIGroup("Electrical", Cn, RoLUT, RpLUT, TauLUT, tempLUT, socLUT)
             UIGroup("Thermal", Cp)
             UIGroup("Thermodynamics", refSoC, refOCV)];
-        Icon = 'icons\iconTECM.png';
+        Icon = 'icons/iconTECM.png';
     end
     
     parameters

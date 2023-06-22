@@ -17,7 +17,7 @@ component BatteryCycler
         
         % Parameter tab
         UILayout = [UIGroup("Charge-discharge specifications", Vmax,Vmin,Ic,Ico,Id,tRestC,tRestD)];
-        Icon = 'icons\iconCharger.png';
+        Icon = 'icons/iconCharger.png';
     end
     
     parameters

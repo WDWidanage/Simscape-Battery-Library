@@ -42,7 +42,7 @@ component TECMD
             UIGroup("Electrical", RoRef, RpRef, TaupRef, TauRef, Cn)
             UIGroup("Thermal", Cp, Tref, Ea_Ro, Ea_Rp, Ea_Taup, Ea_Tau)
             UIGroup("Thermodynamics", refSoC, refOCV)];
-        Icon = "icons\iconTECMD.png";
+        Icon = "icons/iconTECMD.png";
     end
     
     parameters

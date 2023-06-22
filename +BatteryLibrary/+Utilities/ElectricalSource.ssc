@@ -23,7 +23,7 @@ component ElectricalSource
         
         % Parameter tab
         UILayout = [UIGroup("Input signal", inType)];
-        Icon = 'icons\iconGenerator.png';
+        Icon = 'icons/iconGenerator.png';
     end
     
     parameters

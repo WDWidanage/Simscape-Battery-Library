@@ -30,7 +30,7 @@ component ControlledElectricalSource
         n: Side = bottom;   % -ve terminal
         
         % Parameter tab
-        Icon = 'icons\iconGenerator.png';
+        Icon = 'icons/iconGenerator.png';
     end
     
     
