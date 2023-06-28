@@ -33,7 +33,7 @@ component TSPMeA
             UIGroup("Thermal", Cp, Tref, Ea_kn, Ea_kp, Ea_Dn, Ea_De, Ea_Dp, Ea_sigman, Ea_sigmae, Ea_sigmap, Ea_ksei, Ea_Dsei, Ea_sigmasei, Ea_kLi)
             UIGroup("Ageing", kseiRef, DseiRef, sigma_seiRef, Msei, pho_sei, Usei, csei0, kLiRef, ULi, MLi, pho_Li)
             UIGroup("Domain geometry", Ln,Ls,Lp, Area_p, eps_s,eps_p, Rn, Rp, an,ap)];
-        Icon = 'icons\iconTSPMeA.png';
+        Icon = 'icons/iconTSPMeA.png';
 
     end
     
