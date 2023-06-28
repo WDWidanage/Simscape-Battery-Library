@@ -29,7 +29,7 @@ component TSPMe
             UIGroup("Kinetics", knRef,kpRef)
             UIGroup("Thermal", Cp, Tref, Ea_kn,Ea_kp, Ea_Dn,Ea_Dp, Ea_De,Ea_sigman, Ea_sigmae, Ea_sigmap)
             UIGroup("Domain geometry", Ln,Ls,Lp, Area_p, eps_n,eps_s,eps_p, Rn,Rp, an,ap)];
-        Icon = 'icons/iconTSPMe.png';
+        Icon = 'icons\iconTSPMe.png';
 
     end
     
@@ -80,11 +80,11 @@ component TSPMe
         Cn = {4.9,'A*hr'};              % Cell capacity, Cn
         
         % Transport
-        DnRef = {3.3E-14, 'm^2/s'};     % Ref. solid diff. coeff. -ve, DnRef
-        DpRef = {4E-15, 'm^2/s'};       % Ref. solid Therdiff. coeff. +ve, DpRef
-        cn_max = {33133, 'mol/m^3'}     % Maximum -ve particle conc. cn_max
-        cp_max = {63104, 'mol/m^3'}     % Maximum +ve particle conc. cp_max
-        ce0 = {1000,'mol/m^3'};         % Initial electrolyte conc. ce0
+        DnRef = {3.3E-14, 'm^2/s'};     % Ref. -ve electrode diff. coeff., DnRef
+        DpRef = {4E-15, 'm^2/s'};       % Ref. +ve electrode diff. coeff., DpRef
+        cn_max = {33133, 'mol/m^3'}     % Maximum -ve particle conc., cn_max
+        cp_max = {63104, 'mol/m^3'}     % Maximum +ve particle conc., cp_max
+        ce0 = {1000,'mol/m^3'};         % Initial electrolyte conc., ce0
         tr = {0.2594, '1'};             % Transference number, tr
         sigma_nRef = {215, 'S/m'}       % Ref. -ve electrode conductivity, sigma_nRef
         sigma_eRef = {1.2, 'S/m'};      % Ref. electrolyte conductivity, sigma_eRef
@@ -125,8 +125,8 @@ component TSPMe
         eps_p = {0.335, '1'};    % Positive electrode porosity, eps_p
         Area_p = {1027, 'cm^2'}; % Positve electrode area, Area_p
         
-        Rn = {5.86, 'um'}        % -ve Particle radius: Rn
-        Rp = {5.22, 'um'}        % +ve Particle radius: Rp
+        Rn = {5.86, 'um'}        % -ve Particle radius, Rn
+        Rp = {5.22, 'um'}        % +ve Particle radius, Rp
         an = {3.84E5, '1/m'};    % -ve surface area density, an
         ap = {3.82E5, '1/m'};    % +ve surface area density, ap
                 

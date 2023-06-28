@@ -33,7 +33,7 @@ component TSPMeA
             UIGroup("Thermal", Cp, Tref, Ea_kn, Ea_kp, Ea_Dn, Ea_De, Ea_Dp, Ea_sigman, Ea_sigmae, Ea_sigmap, Ea_ksei, Ea_Dsei, Ea_sigmasei, Ea_kLi)
             UIGroup("Ageing", kseiRef, DseiRef, sigma_seiRef, Msei, pho_sei, Usei, csei0, kLiRef, ULi, MLi, pho_Li)
             UIGroup("Domain geometry", Ln,Ls,Lp, Area_p, eps_s,eps_p, Rn, Rp, an,ap)];
-        Icon = 'icons/iconTSPMeA.png';
+        Icon = 'icons\iconTSPMeA.png';
 
     end
     
@@ -167,8 +167,8 @@ component TSPMeA
         eps_p = {0.335, '1'};    % Positive electrode porosity, eps_p
         Area_p = {1027, 'cm^2'}; % Positve electrode area, Area_p
         
-        Rn = {5.86, 'um'}        % -ve Particle radius: Rn
-        Rp = {5.22, 'um'}        % +ve Particle radius: Rp
+        Rn = {5.86, 'um'}        % -ve Particle radius, Rn
+        Rp = {5.22, 'um'}        % +ve Particle radius, Rp
         an = {3.84E5, '1/m'};    % -ve surface area density, an
         ap = {3.82E5, '1/m'};    % +ve surface area density, ap
                 
