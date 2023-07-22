@@ -8,10 +8,10 @@ function  [dv,SF] = getVariables(simout, block_names, nvp)
 %           model or when you call the "sim" command to simulate a 
 %           Simulink model. 
 %   block_names: Specify the names of the BatteryLibrary components that
-%               were used in the simulink model as a vector of strings..
+%               were used in the simulink model as a vector of strings.
 %
-% Optional inouts (name-value pairs)
-%   state_name: This is the name of the states that in the simout
+% Optional inputs (name-value pairs)
+%   state_name: This is the name of the states in the simout
 %                 simulink object "xout" (default)
 %   time_limits: A two element numeric vector indicating a time interval 
 %                [s] to plot the results, useful when simulation time is
@@ -71,62 +71,38 @@ for bb = 1:numel(block_names)
             idx_rng = find(sim_time >= time_limits(1),1,"first") : find(sim_time <= time_limits(2),1,"last");
         end
 
-        if ismember(model_type, "TECM")
-            T = getSignal(simout_states,block_path,"T",time_limits);
-            SF = scalingFactors(model_para.(block_name),T);
-            i = getCurrent(simout_states,block_path,model_para.(block_name),SF,time_limits);
-            z = getSignal(simout_states,block_path,"z",time_limits);
-            V = getVoltage(simout_states,block_path,model_para.(block_name),z,time_limits);
+        T = getSignal(simout_states,block_path,"T",time_limits);
+        SF = scalingFactors(simout_states,block_path,model_para.(block_name),T,time_limits);
+        i = getCurrent(simout_states,block_path,model_para.(block_name),SF,time_limits);
+        z = getSignal(simout_states,block_path,"z",time_limits);
+        dv.(block_name).T.T = T;
+        dv.(block_name).I = i;
+        dv.(block_name).SoC.z = z;
+        dv.(block_name).varying_parameters = SF.para;
+        dv.(block_name).model_type = model_type;
+        dv.(block_name).block_present = 1;
+        dv.(block_name).time = sim_time(idx_rng);
 
-            dv.(block_name).T.T = T;
-            dv.(block_name).I = i;
+        if ismember(model_type, ["TECM","TECMD"])
+            V = getVoltage(simout_states,block_path,model_para.(block_name),z,time_limits);
             dv.(block_name).V = V;
-            dv.(block_name).SoC.z = z;
-            dv.(block_name).model_type = model_type;
-            dv.(block_name).block_present = 1;
-            dv.(block_name).time = sim_time(idx_rng);
         end
 
         if ismember(model_type,"TECMD")
-            T = getSignal(simout_states,block_path,"T",time_limits);
-            SF = scalingFactors(model_para.(block_name),T);
-            i = getCurrent(simout_states,block_path,model_para.(block_name),SF,time_limits);
-            z = getSoC(simout_states,block_path,model_para.(block_name),time_limits);
-            V = getVoltage(simout_states,block_path,model_para.(block_name),z,time_limits);
-
             dv.(block_name).x.x = model_para.(block_name).xn;
-            dv.(block_name).I = i;
-            dv.(block_name).V = V;
-            dv.(block_name).T.T = T;
-            dv.(block_name).SoC = z;
-            dv.(block_name).model_type = model_type;
-            dv.(block_name).block_present = 1;
-            dv.(block_name).time = sim_time(idx_rng);
-
         end
 
         if ismember(model_type,["TSPMe","TSPMeA"])
             r = getParticleDims(model_para.(block_name));
             x = getElectrodeSeperatorDims(model_para.(block_name));
             c = getConcentrations(simout_states,block_path,model_para.(block_name),time_limits);
-            T = getSignal(simout_states,block_path,"T",time_limits);
-            SF = scalingFactors(model_para.(block_name),T);
-            i = getCurrent(simout_states,block_path,model_para.(block_name),SF,time_limits);
-            z = getSoC(simout_states,block_path,model_para.(block_name),time_limits);
             [phi,V] = getPotentials(simout_states,block_path,model_para.(block_name),SF,i,time_limits);
 
             dv.(block_name).c = c;
             dv.(block_name).r = r;
             dv.(block_name).x = x;
-
-            dv.(block_name).T.T = T;
-            dv.(block_name).I = i;
             dv.(block_name).Phi = phi;
             dv.(block_name).V = V;
-            dv.(block_name).SoC = z;
-            dv.(block_name).model_type = model_type;
-            dv.(block_name).block_present = 1;
-            dv.(block_name).time = sim_time(idx_rng);
         end
 
         if ismember(model_type,"TSPMeA")
@@ -267,7 +243,7 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
 
 elseif ismember(para.model_type,"TECMD")
     etaO = getSignal(states,block_path,"etaO",time_limits);
-    i.I = etaO./sf.Ro;
+    i.I = etaO./sf.para.Ro;
 
 elseif ismember(para.model_type,"TECM")
     try
@@ -446,7 +422,7 @@ elseif ismember(para.model_type,"TECMD")
     dx = diff(para.xn);
 
     z.z_dist = z_dist;                                       % Distributed SoC over x
-    z.z = z_dist(:,end);                                          % SoC at particle boundary
+    z.z = z_dist(:,end);                                     % SoC at particle boundary
     z.z_bar = 0.5*(z_dist(:,1:end-1) + z_dist(:,2:end))*dx'; % Average SoC over x - trapezoidal integration
 
 end
@@ -537,11 +513,14 @@ SR.SoH_Li = SoH_Li;
 
 end
 
-function sf = scalingFactors(para,T)
+function sf = scalingFactors(states,block_path,para,T,time_limits)
 
 arguments
+    states
+    block_path
     para
     T
+    time_limits
 end
 
 if ismember(para.model_type,["TSPMe","TSPMeA"])
@@ -650,9 +629,14 @@ elseif ismember(para.model_type,"TECMD")
     Ro = RoRef*exp(Ea_Ro/R*(1./T-1/Tref));        % Arrhenius type equation: Ro
 
     % Store varying parameters
-    sf.Ro = Ro;
+    sf.para.Ro = Ro;
+
 elseif ismember(para.model_type,"TECM")
-    sf = [];
+
+   sf.para.Ro = getSignal(states,block_path,"Ro",time_limits);
+   sf.para.Rp = getSignal(states,block_path,"Rp",time_limits);
+   sf.para.Taup = getSignal(states,block_path,"Taup",time_limits);
+
 end
 end
 
