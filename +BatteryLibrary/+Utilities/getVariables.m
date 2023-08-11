@@ -70,27 +70,33 @@ for bb = 1:numel(block_names)
             time_limits = nvp.time_limits;
             idx_rng = find(sim_time >= time_limits(1),1,"first") : find(sim_time <= time_limits(2),1,"last");
         end
-
+        
+        % Get all the common variables across all the models
         T = getSignal(simout_states,block_path,"T",time_limits);
         SF = scalingFactors(simout_states,block_path,model_para.(block_name),T,time_limits);
         i = getCurrent(simout_states,block_path,model_para.(block_name),SF,time_limits);
-        z = getSignal(simout_states,block_path,"z",time_limits);
         dv.(block_name).T.T = T;
         dv.(block_name).I = i;
-        dv.(block_name).SoC.z = z;
         dv.(block_name).varying_parameters = SF.para;
         dv.(block_name).model_type = model_type;
         dv.(block_name).block_present = 1;
         dv.(block_name).time = sim_time(idx_rng);
 
-        if ismember(model_type, ["TECM","TECMD"])
+        if ismember(model_type, "TECM")
+            z = getSignal(simout_states,block_path,"z",time_limits);
             V = getVoltage(simout_states,block_path,model_para.(block_name),z,time_limits);
             dv.(block_name).V = V;
+            dv.(block_name).SoC.z = z;
         end
 
         if ismember(model_type,"TECMD")
+            z = getSoC(simout_states,block_path,model_para.(block_name),time_limits);
             dv.(block_name).x.x = model_para.(block_name).xn;
+            V = getVoltage(simout_states,block_path,model_para.(block_name),z,time_limits);
+            dv.(block_name).V = V;
+            dv.(block_name).SoC = z;
         end
+
 
         if ismember(model_type,["TSPMe","TSPMeA"])
             r = getParticleDims(model_para.(block_name));
@@ -337,9 +343,9 @@ Phin_hat = nan(num_time_points,nE);
 Phip_hat = nan(num_time_points,nE);
 
 for tt = 1:num_time_points
-    ss_en = sf.sigma_e(tt)*ones(nE,1)/para.sigma_eRef;
-    ss_es = sf.sigma_e(tt)*ones(nS,1)/para.sigma_eRef;
-    ss_ep = sf.sigma_e(tt)*ones(nE,1)/para.sigma_eRef;
+    ss_en = sf.para.sigma_e(tt)*ones(nE,1)/para.sigma_eRef;
+    ss_es = sf.para.sigma_e(tt)*ones(nS,1)/para.sigma_eRef;
+    ss_ep = sf.para.sigma_e(tt)*ones(nE,1)/para.sigma_eRef;
 
 
     % Electrolyte potential terms
@@ -527,24 +533,50 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
     F = 96485.3329;   % Faraday constant
     R = 8.3144;       % Universal gas constant
 
+    nE = para.nE;
+    nS = para.nS;
+
     x = getElectrodeSeperatorDims(para);
+    ce0_hat = value(simscape.Value(para.ce0,para.ce0_unit),'mol/m^3');
+
+    cen_hat = getSignal(states,block_path,"cen_hat",time_limits);
+    ces_hati = getSignal(states,block_path,"ces_hati",time_limits);
+    cep_hat = getSignal(states,block_path,"cep_hat",time_limits);
+
+    DenRef = 8.794E-17 *((cen_hat*ce0_hat).^2) - 3.972E-13 *(cen_hat*ce0_hat) + 4.862E-10; % Ref. negative electrolyte diffusion coefficients, size nE x 1: Dimensional (Ref#2 eq 23)
+    DesRef_i = 8.794E-17 *((ces_hati*ce0_hat).^2) - 3.972E-13 *(ces_hati*ce0_hat) + 4.862E-10; % Ref. separator electrolyte diffusion coefficients, size nS x 1: Dimensional (Ref#2 eq 23)
+    DepRef = 8.794E-17 *((cep_hat*ce0_hat).^2) - 3.972E-13 *(cep_hat*ce0_hat) + 4.862E-10; % Ref. positive electrolyte diffusion coefficients, size nE x 1: Dimensional (Ref#2 eq 23)
 
     % Thermal parameters
     Tref = value(simscape.Value(para.Tref,para.Tref_unit),'K');
+    Ea_kn = value(simscape.Value(para.Ea_kn,para.Ea_kn_unit),'J/mol');
     Ea_kp = value(simscape.Value(para.Ea_kp,para.Ea_kp_unit),'J/mol');
-    kpRef = value(simscape.Value(para.kpRef,para.kpRef_unit),'A*m^(5/2)/mol^(3/2)');
+    Ea_Dn = value(simscape.Value(para.Ea_Dn,para.Ea_Dn_unit),'J/mol');
+    Ea_Dp = value(simscape.Value(para.Ea_Dp,para.Ea_Dp_unit),'J/mol');
+    Ea_De = value(simscape.Value(para.Ea_De,para.Ea_De_unit),'J/mol');
     Ea_sigman = value(simscape.Value(para.Ea_sigman,para.Ea_sigman_unit),'J/mol');
     Ea_sigmae = value(simscape.Value(para.Ea_sigmae,para.Ea_sigmae_unit),'J/mol');
     Ea_sigmap = value(simscape.Value(para.Ea_sigmap,para.Ea_sigmap_unit),'J/mol');
    
+    knRef = value(simscape.Value(para.knRef,para.knRef_unit),'A*m^(5/2)/mol^(3/2)');
+    kpRef = value(simscape.Value(para.kpRef,para.kpRef_unit),'A*m^(5/2)/mol^(3/2)');
+    DnRef = value(simscape.Value(para.DnRef,para.DnRef_unit),'m^2/s');
+    DpRef = value(simscape.Value(para.DnRef,para.DpRef_unit),'m^2/s');
     sigma_nRef = value(simscape.Value(para.sigma_nRef,para.sigma_nRef_unit),'S/m');
     sigma_eRef = value(simscape.Value(para.sigma_eRef,para.sigma_eRef_unit),'S/m');
     sigma_pRef = value(simscape.Value(para.sigma_pRef,para.sigma_pRef_unit),'S/m');
    
+    % Store varying parameters
+    kn = knRef*exp(Ea_kn/R*(1/Tref-1./T));                      % Arrhenius equation for negative electrode reaction rate: kn
     kp = kpRef*exp(Ea_kp/R*(1/Tref-1./T));                      % Arrhenius equation for postive electrode reaction rate: kp
+    Dn = DnRef*exp(Ea_Dn/R*(1/Tref-1./T));                      % Arrhenius equation for negative electrode diffusion coeffcient: Dn
+    Dp = DpRef*exp(Ea_Dp/R*(1/Tref-1./T));                      % Arrhenius equation for positive electrode diffusion coefficent: Dp
     sigma_n = sigma_nRef*exp(Ea_sigman/R*(1/Tref-1./T));        % Arrhenius equation for negative electrode conductivity: sigma_n
     sigma_e = sigma_eRef*exp(Ea_sigmae/R*(1/Tref-1./T));        % Arrhenius equation for electrolyte conductivity: sigma_e
     sigma_p = sigma_pRef*exp(Ea_sigmap/R*(1/Tref-1./T));        % Arrhenius equation for positive electrode conductivity: sigma_p
+    Den = DenRef.*repmat(exp(Ea_De/R*(1/Tref-1./T)),1,nE);                    % Arrhenius equation for negative electrolyte diffusion coefficients
+    Des_i = DesRef_i.*repmat(exp(Ea_De/R*(1/Tref-1./T)),1,nS-2);              % Arrhenius equation for separator electrolyte diffusion coefficients
+    Dep = DepRef.*repmat(exp(Ea_De/R*(1/Tref-1./T)),1,nE);                    % Arrhenius equation for positive electrolyte diffusion coefficients
     
     cp_max = para.cp_max;
     cn_max = para.cn_max;
@@ -575,13 +607,20 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
     sf.gamma_T = R*cn_max/Cp;               % Ratio of temperautre variation to reference temperature
     
     sf.lambda = lambda;
-
-    % Store varying parameters
-    sf.kp = kp;
-    sf.sigma_n = sigma_n;
-    sf.sigma_e = sigma_e;
-    sf.sigma_p = sigma_p;
     sf.That = (T - Tref)*Cp/(R*Tref*cn_max);
+
+    % Store varying paramters
+    sf.para.kn = kn;
+    sf.para.kp = kp;
+    sf.para.Dn = Dn;
+    sf.para.Dp = Dp;
+    sf.para.sigma_n = sigma_n;
+    sf.para.sigma_e = sigma_e;
+    sf.para.sigma_p = sigma_p;
+    sf.para.Den = Den;
+    sf.para.Des_i = Des_i;
+    sf.para.Dep = Dep;
+    sf.para.De = [Den, Des_i, Dep];
 
     if ismember(para.model_type,"TSPMeA")
         Lf0 = value(simscape.Value(para.Lf0,para.Lf0_unit),'m');
@@ -614,6 +653,12 @@ if ismember(para.model_type,["TSPMe","TSPMeA"])
         sf. CC_rsei = CC_rsei;
         sf.CC_sei = CC_sei;
         sf.CC_rLi = CC_rLi;
+
+        % Collect varying parameters
+        sf.para.sigma_sei = sigma_sei;
+        sf.para.ksei = ksei;
+        sf.para.kLi = kLi;
+        sf.para.Dsei = Dsei;
     end
 
 
@@ -622,14 +667,26 @@ elseif ismember(para.model_type,"TECMD")
 
     % Thermal parameters
     Tref = value(simscape.Value(para.Tref,para.Tref_unit),'K');
-    RoRef = value(simscape.Value(para.RoRef,para.RoRef_unit),'Ohm');
     Ea_Ro = value(simscape.Value(para.Ea_Ro,para.Ea_Ro_unit),'J/mol');
+    Ea_Rp = value(simscape.Value(para.Ea_Rp,para.Ea_Rp_unit),'J/mol');
+    Ea_Taup = value(simscape.Value(para.Ea_Taup,para.Ea_Taup_unit),'J/mol');
+    Ea_Tau = value(simscape.Value(para.Ea_Tau,para.Ea_Tau_unit),'J/mol');
 
+    RoRef = value(simscape.Value(para.RoRef,para.RoRef_unit),'Ohm');
+    RpRef = value(simscape.Value(para.RpRef,para.RpRef_unit),'Ohm');
+    TaupRef = value(simscape.Value(para.TaupRef,para.TaupRef_unit),'s');
+    TauRef = value(simscape.Value(para.TauRef,para.TauRef_unit),'s');
 
     Ro = RoRef*exp(Ea_Ro/R*(1./T-1/Tref));        % Arrhenius type equation: Ro
+    Rp = RpRef*exp(Ea_Rp/R*(1./T-1/Tref));        % Arrhenius type equation: Ro
+    Taup = TaupRef*exp(Ea_Taup/R*(1./T-1/Tref));        % Arrhenius type equation: Ro
+    Tau = TauRef*exp(Ea_Tau/R*(1./T-1/Tref));        % Arrhenius type equation: Ro
 
     % Store varying parameters
     sf.para.Ro = Ro;
+    sf.para.Rp = Rp;
+    sf.para.Taup = Taup;
+    sf.para.Tau = Tau;
 
 elseif ismember(para.model_type,"TECM")
 
