@@ -3,6 +3,7 @@ component TECMD
     % A Thermal Equivalent Circuit Model with Diffusion (TECMD) of a lithium-ion battery.
     % Models the ohmic, polarisation and soc distrbuted voltage losses.
     % Assumes an Arrehnius type temperature dependance of the parameters.
+    % Positive current is charging.
     
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 - 18/12/2023
     % All Rights Reserved
@@ -146,7 +147,7 @@ component TECMD
     % Electrical and thermal equations
     equations
         let
-            bc = i/(3*Cn);            % Nuemann boundary condition [1/s]
+            bc = i/(3*Cn);        % Nuemann boundary condition [1/s]
             qf = (v-OCV)*i;       % Heat source
             J = [{zeros(N-1,1),'1/s'}; A_p(N)/delta_V_p(N)*bc]; % [1/s]
             K = 1/(deltaR*Tau);   % [1/s]
