@@ -1,10 +1,10 @@
 component TECMD
     % TECMD : 1.5
-    % A TECM with diffusion of a lithium-ion battery.
-    % Models the ohmic, polarsation and soc distrbuted voltage losses.
+    % A Thermal Equivalent Circuit Model with Diffusion (TECMD) of a lithium-ion battery.
+    % Models the ohmic, polarisation and soc distrbuted voltage losses.
     % Assumes an Arrehnius type temperature dependance of the parameters.
     
-    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 (Doodle moodle poodle)
+    % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 - 18/12/2023
     % All Rights Reserved
     
     nodes
@@ -21,9 +21,9 @@ component TECMD
     
     variables (Access = Protected)
         v = {3.75, 'V'};            % Terminal voltage
-        i = {0, 'A' };              % Current
-        ir = {0, 'A' };             % Current through parallel RC branch
-        T = {298, 'K'};             % Temperature
+        i = {0, 'A'};               % Current
+        ir = {0, 'A'};              % Current through parallel RC branch
+        T = {298, 'K'};             % Cell temperature
         q = {0, 'W'};               % Heat flow rate
         z = {ones(N,1),'1'}         % Dist. SoC
         etaO = {0, 'V'};            % Ohmic overpotential
@@ -37,6 +37,7 @@ component TECMD
         n: Side = bottom;                % -ve electrode terminal
         Hi: Side = left;                 % Heat port
         [zbar, OCV, eta]: Side = right;  % Output signals
+        
         % Parameter tabs
         UILayout = [UIGroup("Initial conditions", z0, T0)
             UIGroup("Electrical", RoRef, RpRef, TaupRef, TauRef, Cn)
@@ -47,12 +48,12 @@ component TECMD
     
     parameters
         % Electrical and diffusion
-        RoRef = {12.5E-3,'Ohm'};      % Ref. Ohimic resistance, RoRef
-        RpRef = {20.8E-3,'Ohm'};      % Ref. Polarisation resistance, RpRef
-        TaupRef = {0.14,'s'};         % Ref. polarisation time constant, TaupRef
-        TauRef = {580,'s'};           % Ref. SoC diffusion time constant, TauRef
-        Cn = {4.9,'A*hr'};            % Cell capacity, Cn
-        z0 = {1, '1'};                % Initial SoC, z0
+        RoRef = {12.5E-3,'Ohm'};        % Ref. Ohimic resistance, RoRef
+        RpRef = {20.8E-3,'Ohm'};        % Ref. Polarisation resistance, RpRef
+        TaupRef = {0.14,'s'};           % Ref. polarisation time constant, TaupRef
+        TauRef = {580,'s'};             % Ref. SoC diffusion time constant, TauRef
+        Cn = {4.9,'A*hr'};              % Cell capacity, Cn
+        z0 = {1, '1'};                  % Initial SoC, z0
         
         % Thermal parameters
         Cp = {110, 'J/K'};              % Heat capacity, Cp
@@ -65,19 +66,31 @@ component TECMD
     end
     
     parameters (Access = private)
-        N = 6;                        % Number of collocation points
-        F = {96485.3329, 's*A/mol'};  % Faraday constant
-        R = {8.3144, 'J/K/mol'};      % Universal gas constant
-        
-        % Define N collocation points and N x N derivative matrix - N is 6 in this model
-        xn = [0, 0.0954915028125263, 0.345491502812526, 0.654508497187474, 0.904508497187474, 1];                   % Collocation points for distributed SoC
-        Dn = [-17	20.9442719099992	-5.78885438199983	3.05572809000084	-2.21114561800017	1;
-            -5.23606797749979	2.34164078649987	4	-1.78885438199983	1.23606797749979	-0.552786404500042;
-            1.44721359549996	-4	0.341640786499874	3.23606797749979	-1.78885438199983	0.763932022500210;
-            -0.763932022500210	1.78885438199983	-3.23606797749979	-0.341640786499874	4	-1.44721359549996;
-            0.552786404500042	-1.23606797749979	1.78885438199983	-4	-2.34164078649987	5.23606797749979;
-            -1	2.21114561800017	-3.05572809000084	5.78885438199983	-20.9442719099992	17];                % Derivative matrix 
-        dx = diff(xn);
+        N = 6;                          % Number of finite volume points
+        F = {96485.3329, 's*A/mol'};    % Faraday constant
+        R = {8.3144, 'J/K/mol'};        % Universal gas constant
+
+        % Construct parameters for FVM discretisation 
+        deltaR  = 1/N;                  % Control volume radial length [-]
+
+        % Get radial, areal and control volume values for each
+        % discretisation node
+        r_p = (1:N)*deltaR;                         % Radial locations at point p [-]
+        r_p_1 = (0:N-1)*deltaR;                     % Radial locations at point p-1 [-]
+        A_p = 4*pi*r_p.^2;                          % Surface area of pth volume [-]
+        delta_V_p = 4/3*pi*(r_p.^3 - r_p_1.^3);     % Volume of pth volume [-]
+
+        % Define the 6 x 6 FVM derivative matrix for a spherical finite volume
+        DMtmp = [-A_p(1), A_p(1), 0, 0, 0, 0;...
+                  A_p(1), -(A_p(2)+A_p(1)), A_p(2), 0, 0, 0;...
+                  0, A_p(2), -(A_p(3)+A_p(2)), A_p(3), 0, 0;...
+                  0, 0, A_p(3), -(A_p(4)+A_p(3)), A_p(4), 0;...
+                  0, 0, 0, A_p(4), -(A_p(5)+A_p(4)), A_p(5);...
+                  0, 0, 0, 0, A_p(5), -A_p(5)];
+
+        DM = diag(1./delta_V_p)*DMtmp     % 6 x 6 spherical FVM derivative matrix
+
+
     end
     
     parameters (Size = variable)
@@ -118,11 +131,11 @@ component TECMD
     
     intermediates % Functional parameters: OCV and temperature dependent parameters
         Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear); % OCV at average SoC
-        Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);    % OCV at surface SoC
+        Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);   % OCV at surface SoC
         Ro = RoRef*exp(Ea_Ro/R*(1/T-1/Tref))        % Arrhenius type equation: Ro
         Rp = RpRef*exp(Ea_Rp/R*(1/T-1/Tref))        % Arrhenius type equation: Rp
         Taup = TaupRef*exp(Ea_Taup/R*(1/T-1/Tref))  % Arrhenius type equation: Taup
-        Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau        
+        Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau
     end
     
     equations (Initial=true)
@@ -133,18 +146,17 @@ component TECMD
     % Electrical and thermal equations
     equations
         let
-            zDTmp = {Dn*z,'s*A/C'};                  % Spatial derivative of SoC
-            bc = Tau*i/Cn;                           % Nuemann boundary condition;
-            zD = [{0,'s*A/C'}; zDTmp(2:N-1); bc];    % Concatanation - with units because of B.C
-            unitConv_FsA = {1,'C/(s*A)'};            % A unit conversiton variable
-            qf = (v-OCV)*i;                          % Heat source
+            bc = i/(3*Cn);            % Nuemann boundary condition [1/s]
+            qf = (v-OCV)*i;       % Heat source
+            J = [{zeros(N-1,1),'1/s'}; A_p(N)/delta_V_p(N)*bc]; % [1/s]
+            K = 1/(deltaR*Tau);   % [1/s]
         in
             % Electrical
             v == p.v - n.v;
-            der(z) == Dn*zD/Tau * unitConv_FsA;                          % SoC diffusion
-            zbar == 0.5*dx*[z(1:N-1)+z(2:N)];                            % Average SoC over x - trapezoidal integration
+            der(z) == K*DM*z +  J;                                       % SoC diffusion
+            zbar == sum(z/N);                                            % Average SoC over x - direct integration
             der(ir) == (i-ir)/Taup;                                      % Current through Rp in RC branch
-            OCV == Ubar ;                                                % OCV
+            OCV == Ubar;                                                 % OCV
             v == OCV + etaO + etaP + etaC;                               % Terminal voltage
             etaO == i*Ro;                                                % Ohmic loss
             etaP == Rp*ir;                                               % Polarisation loss
