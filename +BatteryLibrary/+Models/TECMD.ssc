@@ -4,22 +4,22 @@ component TECMD
     % Models the ohmic, polarisation and soc distrbuted voltage losses.
     % Assumes an Arrehnius type temperature dependance of the parameters.
     % Positive current is charging.
-    
+
     % Copyright (C) W. D. Widanage -  WMG, University of Warwick, U.K. 14-06-2021 - 18/12/2023
     % All Rights Reserved
-    
+
     nodes
         p = foundation.electrical.electrical; % +
         n = foundation.electrical.electrical; % -
         Hi = foundation.thermal.thermal; % H
     end
-    
+
     outputs
-        eta = {zeros(3,1) ,'V'}     % Losses
-        OCV = {3.75, 'V'}           % OCV
         zbar = {1,'1'};             % SoC
+        OCV = {3.75, 'V'}           % OCV
+        eta = {zeros(3,1) ,'V'}     % Losses
     end
-    
+
     variables (Access = Protected)
         v = {3.75, 'V'};            % Terminal voltage
         i = {0, 'A'};               % Current
@@ -31,22 +31,23 @@ component TECMD
         etaP = {0, 'V'};            % Polarisation overpotential
         etaC = {0, 'V'};            % Concentration overpotential
     end
-    
+
     % Annotate port/output locations
     annotations
         p: Side = top;                   % +ve electrode terminal
         n: Side = bottom;                % -ve electrode terminal
         Hi: Side = left;                 % Heat port
         [zbar, OCV, eta]: Side = right;  % Output signals
-        
+
+
         % Parameter tabs
         UILayout = [UIGroup("Initial conditions", z0, T0)
-            UIGroup("Electrical", RoRef, RpRef, TaupRef, TauRef, Cn)
-            UIGroup("Thermal", Cp, Tref, Ea_Ro, Ea_Rp, Ea_Taup, Ea_Tau)
-            UIGroup("Thermodynamics", refSoC, refOCV)];
+        UIGroup("Electrical", RoRef, RpRef, TaupRef, TauRef, Cn)
+        UIGroup("Thermal", Cp, Tref, Ea_Ro, Ea_Rp, Ea_Taup, Ea_Tau)
+        UIGroup("Thermodynamics", refSoC, refOCV)];
         Icon = "icons/iconTECMD.png";
     end
-    
+
     parameters
         % Electrical and diffusion
         RoRef = {12.5E-3,'Ohm'};        % Ref. Ohimic resistance, RoRef
@@ -55,7 +56,7 @@ component TECMD
         TauRef = {580,'s'};             % Ref. SoC diffusion time constant, TauRef
         Cn = {4.9,'A*hr'};              % Cell capacity, Cn
         z0 = {1, '1'};                  % Initial SoC, z0
-        
+
         % Thermal parameters
         Cp = {110, 'J/K'};              % Heat capacity, Cp
         Tref = {298, 'K'};              % Arrhenius ref. temperature, Tref
@@ -65,35 +66,17 @@ component TECMD
         Ea_Tau = {27, 'kJ/mol'}         % Activation energy, Ea_Tau
         T0 = {298, 'K'};                % Initial temperature, T0
     end
-    
+
     parameters (Access = private)
         N = 6;                          % Number of finite volume points
         F = {96485.3329, 's*A/mol'};    % Faraday constant
         R = {8.3144, 'J/K/mol'};        % Universal gas constant
 
-        % Construct parameters for FVM discretisation 
-        deltaR  = 1/N;                  % Control volume radial length [-]
-
-        % Get radial, areal and control volume values for each
-        % discretisation node
-        r_p = (1:N)*deltaR;                         % Radial locations at point p [-]
-        r_p_1 = (0:N-1)*deltaR;                     % Radial locations at point p-1 [-]
-        A_p = 4*pi*r_p.^2;                          % Surface area of pth volume [-]
-        delta_V_p = 4/3*pi*(r_p.^3 - r_p_1.^3);     % Volume of pth volume [-]
-
-        % Define the 6 x 6 FVM derivative matrix for a spherical finite volume
-        DMtmp = [-A_p(1), A_p(1), 0, 0, 0, 0;...
-                  A_p(1), -(A_p(2)+A_p(1)), A_p(2), 0, 0, 0;...
-                  0, A_p(2), -(A_p(3)+A_p(2)), A_p(3), 0, 0;...
-                  0, 0, A_p(3), -(A_p(4)+A_p(3)), A_p(4), 0;...
-                  0, 0, 0, A_p(4), -(A_p(5)+A_p(4)), A_p(5);...
-                  0, 0, 0, 0, A_p(5), -A_p(5)];
-
-        DM = diag(1./delta_V_p)*DMtmp     % 6 x 6 spherical FVM derivative matrix
-
+        % Get finite volume derivative matrix and other related quantitiess
+        [DM,deltaR,~,A_p,delta_V_p] = getSpherical_FVDM_6(1)     
 
     end
-    
+
     parameters (Size = variable)
         refSoC = {[0:100]'/100 '1'}; % ref SoC break points
         refOCV = {[2.87226666666667 2.96052812994699 3.02804006137187 3.09555199279676...
@@ -123,13 +106,13 @@ component TECMD
             4.11557909373630 4.12906316200268 4.14254723026907 4.15856111602972...
             4.17532536875376]' 'V'};  % ref OCV value
     end
-    
-    
+
+
     branches
         i : p.i -> n.i;
         q : Hi.Q -> *;
     end
-    
+
     intermediates % Functional parameters: OCV and temperature dependent parameters
         Ubar = tablelookup(refSoC,refOCV,zbar,extrapolation = linear); % OCV at average SoC
         Uz = tablelookup(refSoC,refOCV,z(N),extrapolation = linear);   % OCV at surface SoC
@@ -138,12 +121,12 @@ component TECMD
         Taup = TaupRef*exp(Ea_Taup/R*(1/T-1/Tref))  % Arrhenius type equation: Taup
         Tau = TauRef*exp(Ea_Tau/R*(1/T-1/Tref))     % Arrhenius type equation: Tau
     end
-    
+
     equations (Initial=true)
         z == z0*ones(N,1);
         T == T0;
     end
-    
+
     % Electrical and thermal equations
     equations
         let
@@ -157,18 +140,47 @@ component TECMD
             der(z) == K*DM*z +  J;                                       % SoC diffusion
             zbar == sum(z/N);                                            % Average SoC over x - direct integration
             der(ir) == (i-ir)/Taup;                                      % Current through Rp in RC branch
-            OCV == Ubar;                                                 % OCV
+            OCV == Ubar;                                                 % OCV [V]
             v == OCV + etaO + etaP + etaC;                               % Terminal voltage
             etaO == i*Ro;                                                % Ohmic loss
             etaP == Rp*ir;                                               % Polarisation loss
             etaC == Uz - OCV;                                            % Diffusion losses
             eta == [etaO; etaP; etaC];                                   % Overpotential losses
-            
+
             % Thermal
             T == Hi.T;
             Cp*der(T) == q + qf;                                         % Heat equation
         end
     end
-    
-    
+
+end
+
+function [DM,deltaR,r_p,A_p,delta_V_p] = getSpherical_FVDM_6(R)
+    % A function to calculate and return the Finite Volume derivative
+    % matrix for a given radius R [-].
+    % This function assumes spherical shell control volumes and N = 6 
+    % control volumes.
+
+    definitions
+        % Construct parameters for FVM discretisation
+        N = 6;                         % Number of control volumes
+        deltaR = 1/N;                  % Control volume radial length [-]
+
+        % Get radial, areal and control volume values for each
+        % discretisation node
+        r_p = (1:N)*deltaR;                         % Radial locations at point p [-]
+        r_p_1 = (0:N-1)*deltaR;                     % Radial locations at point p-1 [-]
+        A_p = 4*pi*r_p.^2;                          % Surface area of pth volume [-]
+        delta_V_p = 4/3*pi*(r_p.^3 - r_p_1.^3);     % Volume of pth spherical shell [-]
+
+        % Define the 6 x 6 FVM derivative matrix for a spherical finite volume
+        DMtmp = [-A_p(1), A_p(1), 0, 0, 0, 0;...
+            A_p(1), -(A_p(2)+A_p(1)), A_p(2), 0, 0, 0;...
+            0, A_p(2), -(A_p(3)+A_p(2)), A_p(3), 0, 0;...
+            0, 0, A_p(3), -(A_p(4)+A_p(3)), A_p(4), 0;...
+            0, 0, 0, A_p(4), -(A_p(5)+A_p(4)), A_p(5);...
+            0, 0, 0, 0, A_p(5), -A_p(5)];
+
+        DM = diag(1./delta_V_p)*DMtmp     % 6 x 6 spherical FVM derivative matrix
+    end
 end
